@@ -1,6 +1,9 @@
 import json
 import copy
 import requests
+from pymongo import MongoClient
+from py_abac import PDP, Policy, AccessRequest
+from py_abac.storage.mongo import MongoStorage
 from flask import Blueprint, request, url_for, redirect, Response, make_response, jsonify
 from flask import current_app as app
 from urllib.parse import urljoin, urlencode
@@ -280,6 +283,39 @@ def register():
     # Otherwise the input location is invalid, return
     return jsonify(ERROR_JSON), 400
 
+@api.route('/policy', methods=['POST'])
+def policy():
+    """Register a new policy using the py_abac format. 
+
+    If the current directory is the target location specified by `location` argument, the operation is processed locally
+    Otherwise it will delegate the operation to the next possible directory (if there is ), and return whatever the result it receives
+    
+    In addition, an extra 'push-up' operation may be called if the publicity is larger than zero. It will send a new register request
+    using the same thing description information to its parent directory with publicity decreased by one.
+    
+    Args:
+        All of the following arguments are required and passed in the request URL.
+        td (JSON str): the information of the thing description to be registered in JSON format
+        location (str): the location where the thing description should be registered
+        publicity (number): specify the number of levels that the thing description should be duplicate to upper level directory.
+            By default this is zero, means it does not need to be pushed up.
+
+    Returns:
+        HTTP Response: if the register is completed, a simple success string with HTTP status code 200 is returned
+            Otherwise a reason is returned in the response and HTTP status code is set to 400
+    """
+
+    # 1-2. check and parse input
+    if not is_json_request(request, ["td", "location", "publicity"]):
+        return jsonify(ERROR_JSON), 400
+    policy = request.get_json()
+
+    # 3. add policy to mongo storage
+    client = MongoClient()
+    storage = MongoStorage(client)
+    storage.add(policy)
+
+    return make_response("Created Policy", 200)
 
 @api.route('/update_aggregate', methods=['POST', 'DELETE'])
 def update_type_aggregation():

@@ -17,6 +17,10 @@
         href="{{ url_for('dashboard.register') }}">
         Register
       </a>
+      <a class="list-group-item list-group-item-action {{ 'active' if tagname == 'policy' else '' }}"
+        href="{{ url_for('dashboard.policy') }}">
+        Policy
+      </a>
       <a class="list-group-item list-group-item-action {{ 'active' if tagname == 'query' else '' }}"
         href="{{ url_for('dashboard.query')}}">
         Query

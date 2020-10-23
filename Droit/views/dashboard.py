@@ -49,3 +49,10 @@ def register():
     Render the thing description register page for the 'dashboard' module
     """
     return render_template('dashboard/register.html', tagname = 'register')
+
+@dashboard.route('/policy')
+def policy():
+    """
+    Render the thing description policy page for the 'dashboard' module
+    """
+    return render_template('dashboard/policy.html', tagname = 'policy')
