@@ -306,10 +306,9 @@ def policy():
     """
 
     # 1-2. check and parse input
-    if not is_json_request(request, ["td", "location", "publicity"]):
+    if not is_json_request(request, ["td", "location"]):
         return jsonify(ERROR_JSON), 400
     policy = request.get_json()
-
     # 3. add policy to mongo storage
     client = MongoClient()
     storage = MongoStorage(client)
