@@ -33,11 +33,11 @@ $("#submit").click(function (e) {
         show_prompt("Please Filled All Input Fields", title = 'Alert');
         return;
     }
-    
+
     // get form data, and check whether it's a valid json
     let td_json = null;
     try {
-        td_json = { "td": JSON.parse(text.trim()), "location": location};
+        td_json = { "td": JSON.parse(text.trim()), "location": location };
     } catch (error) {
         show_prompt("Input is not in JSON format. Please try again");
         return;
@@ -45,7 +45,7 @@ $("#submit").click(function (e) {
     // send out the register request
     lock_btn($registerBtn);
     $.ajax({
-        url: REGISTER_URL,
+        url: POLICY_URL,
         type: "POST",
         data: JSON.stringify(td_json),
         contentType: "application/json",

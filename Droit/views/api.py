@@ -306,14 +306,13 @@ def policy():
     """
 
     # 1-2. check and parse input
-    if not is_json_request(request, ["td", "location"]):
+    if not is_json_request(request, ["td","location"]):
         return jsonify(ERROR_JSON), 400
-    policy = request.get_json()
+    policy = Policy.from_json(request.get_json()['td'])
     # 3. add policy to mongo storage
     client = MongoClient()
     storage = MongoStorage(client)
     storage.add(policy)
-
     return make_response("Created Policy", 200)
 
 @api.route('/update_aggregate', methods=['POST', 'DELETE'])
