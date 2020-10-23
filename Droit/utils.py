@@ -4,6 +4,9 @@ Functions declared in this file are helper functions that can be shared by all o
 import flask
 from urllib.parse import urljoin
 from .models import DirectoryNameToURL, TargetToChildName
+from pymongo import MongoClient
+from py_abac.storage.mongo import MongoStorage
+from py_abac import PDP, Policy, AccessRequest
 
 def is_json_request(request: flask.Request, properties: list = []) -> bool:
     """Check whether the request's body could be parsed to JSON format, and all necessary properties specified by `properties` are in the JSON object
@@ -25,7 +28,6 @@ def is_json_request(request: flask.Request, properties: list = []) -> bool:
         if prop not in body:
             return False
     return True
-
 
 def clean_thing_description(thing_description: dict) -> dict:
     """Change the property name "@type" to "thing_type" and "id" to "thing_id" in the thing_description
@@ -83,3 +85,39 @@ def get_target_url(location: str, api: str = "") -> str:
         target_url = urljoin(master_url, api)
 
     return target_url
+
+def add_policy_to_storage(policy: dict) -> bool :
+    #json = request.get_json()
+    policy = Policy.from_json(policy)
+    client = MongoClient()
+    storage = MongoStorage(client)
+    try:
+        storage.add(policy)
+    except:
+        return False
+    return True
+
+def delete_policy_from_storage(uid : str)  -> bool :
+    pass
+    """
+    client = MongoClient()
+    storage = MongoStorage(client)
+    storage.delete(uid = uid)
+    """
+    
+
+def is_request_allowed(request: flask.Request) -> bool:
+    client = MongoClient()
+    storage = MongoStorage(client)
+    pdp = PDP(storage)
+    request = AccessRequest.from_json(request.get_json())
+    return pdp.is_allowed(request)
+
+def is_policy_request(policy: dict, keys: list = []) -> bool:
+    if policy is None:
+        return False
+    for key in keys:
+        if key not in policy:
+            return False
+    return True
+

@@ -1,17 +1,15 @@
 import json
 import copy
 import requests
-from pymongo import MongoClient
-from py_abac import PDP, Policy, AccessRequest
-from py_abac.storage.mongo import MongoStorage
 from flask import Blueprint, request, url_for, redirect, Response, make_response, jsonify
 from flask import current_app as app
 from urllib.parse import urljoin, urlencode
 from ..models import ThingDescription, DirectoryNameToURL, TypeToChildrenNames, TargetToChildName
-from ..utils import get_target_url, is_json_request, clean_thing_description
+from ..utils import get_target_url, is_json_request, clean_thing_description, add_policy_to_storage, delete_policy_from_storage, is_policy_request
 
 
 ERROR_JSON = {"error": "Invalid request."}
+ERROR_POLICY = {"error": "Invalid policy."}
 OPERATION_COUNT = ""
 
 api = Blueprint('api', __name__)
@@ -308,12 +306,17 @@ def policy():
     # 1-2. check and parse input
     if not is_json_request(request, ["td","location"]):
         return jsonify(ERROR_JSON), 400
-    policy = Policy.from_json(request.get_json()['td'])
-    # 3. add policy to mongo storage
-    client = MongoClient()
-    storage = MongoStorage(client)
-    storage.add(policy)
-    return make_response("Created Policy", 200)
+
+    json = request.get_json()
+    policy = json['td']
+    
+    if not is_policy_request(policy, ["uid", "description", "effect", "rules", "targets", "priority"]):
+        return jsonify(ERROR_POLICY), 400
+    
+    if add_policy_to_storage(policy):
+        return make_response("Created Policy", 200)
+    
+    return jsonify(ERROR_JSON), 400
 
 @api.route('/update_aggregate', methods=['POST', 'DELETE'])
 def update_type_aggregation():
