@@ -8,7 +8,7 @@
 <div class="container">
     <h3>Relying Party <span class="text-primary">{{grant.client.client_name}}</span>  is requesting user <span class="text-primary">{{ current_user.username }}</span> 's authorization:</h3>
     <ul class="m-5">
-        {% for scope in grant.request.scope.split() %}
+        {% for scope in client_scope.split() %}
         <li><h5>{{scope}}</h5></li>
         {% endfor %}
     </ul>

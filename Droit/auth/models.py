@@ -48,6 +48,7 @@ class User(auth_db.Model, UserMixin):
     id = auth_db.Column(auth_db.Integer, primary_key=True)
     username = auth_db.Column(auth_db.String(30), nullable=False)
     email = auth_db.Column(auth_db.String(35), unique=True, nullable=False)
+    address = auth_db.Column(auth_db.String(128), nullable=True)
     # if the user is loggedin using oidc, the password is random assigned
     password = auth_db.Column(auth_db.Text, nullable=False)
     account_type = auth_db.Column(auth_db.Enum(UserAccountTypeEnum))
@@ -71,6 +72,18 @@ class User(auth_db.Model, UserMixin):
         """
         return int_to_unicode(self.id)
 
+    def get_provider_name(self):
+        return self.provider_name
+
+    def get_email(self):
+        return self.email
+
+    def get_address(self):
+        return self.address
+
+    def set_address(self, address):
+        self.address = address
+
 
 class OAuth2Client(auth_db.Model, OAuth2ClientMixin):
     """OAuth2/OpenID Connect client application class
@@ -83,6 +96,8 @@ class OAuth2Client(auth_db.Model, OAuth2ClientMixin):
     __tablename__ = 'oauth2_client'
 
     id = auth_db.Column(auth_db.Integer, primary_key=True)
+    # scope = auth_db.Column(auth_db.String(length=40))
+    scope = auth_db.Column(auth_db.Text, default='')
     # user_id = db.Column(
     #     db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'))
     # user = db.relationship('User')
@@ -118,7 +133,7 @@ class OAuth2Token(auth_db.Model, OAuth2TokenMixin):
     id_token = auth_db.Column(auth_db.String(length=200))
     expires_at = auth_db.Column(auth_db.Integer)
     expires_in = auth_db.Column(auth_db.Integer)
-    scope = auth_db.Column(auth_db.String(length=40))
+    # scope = auth_db.Column(auth_db.String(length=40))
     user_id = auth_db.Column(
         auth_db.Integer, auth_db.ForeignKey('user.id', ondelete='CASCADE'))
     user = auth_db.relationship('User')
@@ -222,7 +237,11 @@ class OpenIDCode(_OpenIDCode):
         ]
         For more details, please refer to authlib documentation or UserInfo's definition
         """
-        return UserInfo(sub=str(user.id), username=user.username, email=user.email)
+        user_info = UserInfo(sub=str(user.id), username=user.username, email=user.email)
+        if 'address' in scope:
+            user_info['address'] = user.address
+
+        return user_info
 
 
 def int_to_unicode(number):

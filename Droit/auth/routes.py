@@ -21,7 +21,7 @@ import time
 import jwt
 from jwt.exceptions import InvalidAudienceError
 from flask import request, jsonify, abort
-from flask import Blueprint, render_template, request, make_response, redirect, url_for
+from flask import Blueprint, render_template, request, make_response, redirect, url_for, session
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import gen_salt
 from authlib.oauth2 import OAuth2Error
@@ -87,7 +87,7 @@ def oidc_create_client():
 
     if request.method == 'POST' and oauth_client_form.validate():
         client_id = gen_salt(24)
-        client = OAuth2Client(client_id=client_id)  # optionally bind a user with the client
+        client = OAuth2Client(client_id=client_id, scope=oauth_client_form.scope.data)  # optionally bind a user with the client
         client.client_id_issued_at = int(time.time())
         if oauth_client_form.token_endpoint_auth_method.data == 'none':
             client.client_secret = ''
@@ -117,6 +117,11 @@ def oidc_consent_authorize():
     """Ask for login user's consent to provide the request scope to the replying party
 
     """
+    # get additional scope
+    add_scope = request.args.get('add_scope', None)
+    client_id = request.args.get('client_id', None)
+    oauth_client = OAuth2Client.query.filter_by(client_id=client_id).first()
+    client_scope = add_scope
     # user is not authenticated, redirect to login page
     if request.method == 'GET':
         # 1. if user is not logged in, redirect to log in user
@@ -129,14 +134,21 @@ def oidc_consent_authorize():
         except OAuth2Error as error:
             return jsonify(dict(error.get_body()))
         # 3. ask for authorizization
-        return render_template("auth/oidc_authorize.html", grant=grant)
+        return render_template("auth/oidc_authorize.html", grant=grant, client_scope=client_scope)
 
     elif request.method == 'POST':
         # Check user's response and respond to the replying party accordingly
         if 'confirm' in request.form:
-            grant_user = current_user
-        else:
-            grant_user = None
+            # grant_user = current_user
+            # change scope in oauth2_client
+            if oauth_client.scope != client_scope:
+                oauth_client.scope = client_scope
+                client_metadata = oauth_client.client_metadata
+                client_metadata["scope"] = oauth_client.scope
+                oauth_client.set_client_metadata(client_metadata)
+                auth_db.session.commit()
+        # else:
+        grant_user = current_user
         return authorization.create_authorization_response(grant_user=grant_user)
 
 
@@ -167,7 +179,7 @@ def oidc_login(provider_name=None):
     else:
         # Redirect to the authorization page of the provider
         provider = oauth.create_client(provider_name)
-        return provider.authorize_redirect()
+        return provider.authorize_redirect(add_scope='openid profile')
 
 
 @auth.route('/oidc_auth_code/<provider_name>', methods=['GET'])
@@ -191,8 +203,10 @@ def oidc_auth_code_process(provider_name):
     token = provider.authorize_access_token()
     # get user profile using access token
     id_token = token['id_token']
+    print(token)
     try:
         user_info = jwt.decode(id_token, f'{provider_name}-secret', audience=oauth._clients[provider_name].client_id)
+        print(user_info)
     except InvalidAudienceError as e:
         print(e)
         abort(401)
@@ -209,8 +223,19 @@ def oidc_auth_code_process(provider_name):
         auth_db.session.add(user)
         auth_db.session.commit()
 
+    # set additional scope
+    user_scope = token['scope']
+    # instead of storing into database, store in session
+    if 'address' in user_scope.split():
+        session['return_address'] = user_info['address']
+
     # login this user using flask-login
     login_user(user)
+
+    if user_scope != 'openid profile':
+        # redirect to /about
+        return redirect(url_for('home.about'))
+
     return redirect(url_for('home.index'))
 
 
@@ -255,6 +280,7 @@ def register():
         if not user:
             new_user = User(username=user_form.username.data,
                             email=user_form.email.data,
+                            address=user_form.address.data,
                             password=get_hashed_password(user_form.password.data),
                             account_type=UserAccountTypeEnum.local)  # local user register
             auth_db.session.add(new_user)
