@@ -53,6 +53,13 @@ def register():
 @dashboard.route('/policy')
 def policy():
     """
-    Render the thing description policy page for the 'dashboard' module
+    Render the policy page for the 'dashboard' module
     """
     return render_template('dashboard/policy.html', tagname = 'policy')
+
+@dashboard.route('/policy_decision')
+def policy_decision():
+    """
+    Render the request page for the 'dashboard' module
+    """
+    return render_template('dashboard/policy_decision.html', tagname = 'policy_decision')

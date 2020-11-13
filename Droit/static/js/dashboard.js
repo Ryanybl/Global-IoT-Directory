@@ -1,5 +1,6 @@
 const REGISTER_URL = '/api/register';
 const POLICY_URL = '/api/policy';
+const POLICY_DECISION_URL = '/api/policy_decision';
 const SEARCH_API = '/api/search';
 const DELETE_API = '/api/delete';
 const RELOCATE_API = '/api/relocate';

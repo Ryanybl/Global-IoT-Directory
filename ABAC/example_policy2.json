@@ -1,7 +1,7 @@
-{"description": "Allow everyone to access everything",
+{"description": "Allow only ryan-liang@qq.com to access.",
     "effect": "allow",
     "rules": {
-        "subject": [{"id": {"condition": "RegexMatch", "value": ".*"}}],
+        "subject": [{"$.email": {"condition": "Equals", "value": "ryan-liang@qq.com"}}],
         "resource": {"id": {"condition": "RegexMatch", "value": ".*"}},
         "action": [{"$.method": {"condition": "Equals", "value": "create"}},
                    {"$.method": {"condition": "Equals", "value": "delete"}},
@@ -9,5 +9,5 @@
         "context": {}
     },
     "targets": {},
-    "priority": 0
+    "priority": 1
 }
