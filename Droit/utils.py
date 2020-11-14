@@ -4,6 +4,8 @@ Functions declared in this file are helper functions that can be shared by all o
 import flask
 from urllib.parse import urljoin
 from .models import DirectoryNameToURL, TargetToChildName
+from flask_login import current_user
+from .auth import User
 from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
 from py_abac import PDP, Policy, AccessRequest
@@ -86,11 +88,11 @@ def get_target_url(location: str, api: str = "") -> str:
 
     return target_url
 
-def add_policy_to_storage(policy: dict) -> bool :
+def add_policy_to_storage(policy: dict, location: str) -> bool :
     #json = request.get_json()
     policy = Policy.from_json(policy)
     client = MongoClient()
-    storage = MongoStorage(client)
+    storage = MongoStorage(client, db_name = location)
     try:
         storage.add(policy)
     except:
@@ -110,8 +112,32 @@ def is_request_allowed(request: flask.Request) -> bool:
     client = MongoClient()
     storage = MongoStorage(client)
     pdp = PDP(storage)
-    request = AccessRequest.from_json(request.get_json())
-    return pdp.is_allowed(request)
+
+    # Name: ryan, Email:yunboryan@gmail.com
+    
+    user_id = current_user.get_user_id()
+    user = User.query.filter_by(id = user_id).first()
+    user_email = user.get_email()
+    request_json = request.get_json()
+    thing_id = request_json['thing_id']
+    AccessRequest_json = {
+        "subject": {
+            "id": str(user_id), 
+            "attributes": {"email": str(user_email)}
+        },
+        "resource": {
+            "id": str(thing_id), 
+            "attributes": {}
+        },
+        "action": {
+            "id": "", 
+            "attributes": {"method": "get"}
+        },
+        "context": {
+        }
+    }
+    access_request = AccessRequest.from_json(AccessRequest_json)
+    return pdp.is_allowed(access_request)
 
 def is_policy_request(policy: dict, keys: list = []) -> bool:
     if policy is None:
