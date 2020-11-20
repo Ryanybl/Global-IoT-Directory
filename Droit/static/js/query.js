@@ -1,7 +1,7 @@
 
 const jsonFormatter = new JSONFormatter("json-thingdescription", false)
 const $tdModal = $("#thing_description_modal");
-
+var searched_location
 $(".result table tbody").on("click", ".request", function () {
     let thingDescription = $(this).siblings('div').text().trim();
     jsonFormatter.setJSONString(thingDescription);
@@ -11,6 +11,7 @@ $(".result table tbody").on("click", ".request", function () {
 
     thing_json = JSON.parse(thingDescription)
     thing_json['action'] = action
+    thing_json['location'] = searched_location
 
     lock_btn(requestBtn);
     $.ajax({
@@ -33,6 +34,11 @@ $(".result table tbody").on("click", ".request", function () {
 // Register click event for the 'search' button
 $("#search").click(function () {
     let form_data = $(".register-form").serialize();
+    var form_data_array = {};
+    $.each($('.register-form').serializeArray(), function(i, field) {
+        form_data_array[field.name] = field.value;
+    });
+    searched_location = form_data_array['location']
     let request_url = `${SEARCH_API}?${form_data}`
 
     /** Send asynchronous request to delete the thing description */

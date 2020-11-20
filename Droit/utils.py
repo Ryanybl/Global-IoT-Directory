@@ -109,17 +109,22 @@ def delete_policy_from_storage(uid : str)  -> bool :
     
 
 def is_request_allowed(request: flask.Request) -> bool:
-    client = MongoClient()
-    storage = MongoStorage(client)
-    pdp = PDP(storage)
+    
 
     # Name: ryan, Email:yunboryan@gmail.com
-    
+    if (not current_user):
+        return False
     user_id = current_user.get_user_id()
     user = User.query.filter_by(id = user_id).first()
     user_email = user.get_email()
     request_json = request.get_json()
     thing_id = request_json['thing_id']
+    policy_location = request_json['location']
+
+    client = MongoClient()
+    storage = MongoStorage(client,db_name=policy_location)
+    pdp = PDP(storage)
+
     AccessRequest_json = {
         "subject": {
             "id": str(user_id), 

@@ -20,7 +20,7 @@ class UserForm(Form):
     """
     email = StringField('Email Address', [validators.InputRequired(), validators.Length(min=6, max=35), 
                     validators.Email('Please enter a valid email address')])
-    address = StringField('Address', [validators.InputRequired(), validators.Length(min=0, max=128)])
+    address = StringField('Address', [validators.Optional(), validators.Length(min=0, max=128)])
     password = PasswordField('Password', [validators.InputRequired(),validators.Length(min=6,max=50)])
 
 class UserLoginForm(UserForm):
