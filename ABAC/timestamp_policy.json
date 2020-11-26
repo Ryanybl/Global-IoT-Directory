@@ -1,7 +1,7 @@
-{"description": "Allow only ryan-liang@qq.com to access.",
+{"description": "Allow access after 2pm.",
     "effect": "allow",
     "rules": {
-        "subject": [{"$.country": {"condition": "Equals", "value": "US"}}],
+        "subject": {"$.timestamp": {"condition": "Gt","value": 1605902666.793003}},
         "resource": {"id": {"condition": "RegexMatch", "value": ".*"}},
         "action": [{"$.method": {"condition": "Equals", "value": "create"}},
                    {"$.method": {"condition": "Equals", "value": "delete"}},

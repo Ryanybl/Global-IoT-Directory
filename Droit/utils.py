@@ -3,12 +3,15 @@ Functions declared in this file are helper functions that can be shared by all o
 """
 import flask
 from urllib.parse import urljoin
+from datetime import datetime
+from py_abac.pdp import EvaluationAlgorithm
 from .models import DirectoryNameToURL, TargetToChildName
 from flask_login import current_user
 from .auth import User
 from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
 from py_abac import PDP, Policy, AccessRequest
+from py_abac.provider.base import AttributeProvider
 
 def is_json_request(request: flask.Request, properties: list = []) -> bool:
     """Check whether the request's body could be parsed to JSON format, and all necessary properties specified by `properties` are in the JSON object
@@ -108,27 +111,64 @@ def delete_policy_from_storage(uid : str)  -> bool :
     """
     
 
+# check if the request is allowed by policy in the current level
 def is_request_allowed(request: flask.Request) -> bool:
+    other_attributes = {}
+
+    class UserIdAttributeProvider(AttributeProvider):
+        def get_attribute_value(self, ace, attribute_path,ctx):
+            if (not current_user):
+                return None
+            if(ace == "subject" and attribute_path == "$.id"):
+                return current_user.get_user_id()
+            return None
+            
+    class EmailAttributeProvider(AttributeProvider):
+        def get_attribute_value(self, ace, attribute_path,ctx):
+            user_id = ctx.get_attribute_value("subject","$.id")
+            if not user_id:
+                return None
+            if(ace == "subject" and attribute_path == "$.email"):
+                user = User.query.filter_by(id = user_id).first()
+                user_email = user.get_email()
+                return user_email
+            return None
     
+    class TimestampAttributeProvider(AttributeProvider):
+        def get_attribute_value(self, ace, attribute_path,ctx):
+            print(f"accessed 1, timestamp")
+            if(attribute_path == "$.timestamp"):
+                print(f"accessed, current timestamp:{datetime.now().timestamp()}")
+                return datetime.now().timestamp()
+            return None
+    class OtherAttributeProvider(AttributeProvider):
+        # def request_other_attributes(self, ace, attribute_path):
+
+        #     value = "value"
+        #     return value
+
+        def get_attribute_value(self, ace: str, attribute_path: str, ctx):
+            other_attributes.append(attribute_path)
+            # redirect
+            # value = request['address']
+            return None
 
     # Name: ryan, Email:yunboryan@gmail.com
-    if (not current_user):
-        return False
-    user_id = current_user.get_user_id()
-    user = User.query.filter_by(id = user_id).first()
-    user_email = user.get_email()
+    
+    
     request_json = request.get_json()
     thing_id = request_json['thing_id']
     policy_location = request_json['location']
 
     client = MongoClient()
     storage = MongoStorage(client,db_name=policy_location)
-    pdp = PDP(storage)
+    pdp = PDP(storage,EvaluationAlgorithm.HIGHEST_PRIORITY,[EmailAttributeProvider(),UserIdAttributeProvider(),TimestampAttributeProvider(),OtherAttributeProvider()])
 
     AccessRequest_json = {
         "subject": {
-            "id": str(user_id), 
-            "attributes": {"email": str(user_email)}
+            "id": '', 
+            "address": 'New York',
+            "attributes": {}
         },
         "resource": {
             "id": str(thing_id), 
@@ -139,8 +179,11 @@ def is_request_allowed(request: flask.Request) -> bool:
             "attributes": {"method": "get"}
         },
         "context": {
+            "timestamp":{}
         }
     }
+    # for attribute in other_attributes_returned:
+    #     # ...AccessRequest['subject']['address'] = "new york"
     access_request = AccessRequest.from_json(AccessRequest_json)
     return pdp.is_allowed(access_request)
 
