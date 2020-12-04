@@ -21,7 +21,12 @@ $(".result table tbody").on("click", ".request", function () {
         contentType: "application/json",
         error: function (jqXHR, textStatus, errorThrown) {
             unlock_btn(requestBtn);
-            show_prompt("Access Denied");
+            if(jqXHR.status == 300){
+                window.location.href=jqXHR.responseText;
+            }else{
+                show_prompt("Access denied")
+            }
+                
         },
         success: function (data, textStatus, jqXHR) {
             unlock_btn(requestBtn);

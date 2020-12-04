@@ -330,10 +330,13 @@ def policy():
 def policy_decision():
     if not is_json_request(request, ["thing_id","thing_type","action"]):
         return jsonify(ERROR_JSON), 400
-    if is_request_allowed(request):
+    code = is_request_allowed(request)
+    if code == 1:
         return make_response("Request Succeed", 200)
-    else:
+    elif code == 0:
         return jsonify({"id" : user.get_id()}), 400
+    else:
+        return url_for("home.about"),300
 
 @api.route('/update_aggregate', methods=['POST', 'DELETE'])
 def update_type_aggregation():

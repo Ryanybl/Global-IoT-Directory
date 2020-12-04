@@ -4,6 +4,7 @@ Functions declared in this file are helper functions that can be shared by all o
 import flask
 from urllib.parse import urljoin
 from datetime import datetime
+from flask.helpers import url_for
 from py_abac.pdp import EvaluationAlgorithm
 from .models import DirectoryNameToURL, TargetToChildName
 from flask_login import current_user
@@ -113,7 +114,7 @@ def delete_policy_from_storage(uid : str)  -> bool :
 
 # check if the request is allowed by policy in the current level
 def is_request_allowed(request: flask.Request) -> bool:
-    other_attributes = {}
+    other_attributes = []
 
     class UserIdAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace, attribute_path,ctx):
@@ -146,11 +147,10 @@ def is_request_allowed(request: flask.Request) -> bool:
 
         #     value = "value"
         #     return value
-
         def get_attribute_value(self, ace: str, attribute_path: str, ctx):
-            other_attributes.append(attribute_path)
             # redirect
             # value = request['address']
+            other_attributes.append(attribute_path)
             return None
 
     # Name: ryan, Email:yunboryan@gmail.com
@@ -167,7 +167,6 @@ def is_request_allowed(request: flask.Request) -> bool:
     AccessRequest_json = {
         "subject": {
             "id": '', 
-            "address": 'New York',
             "attributes": {}
         },
         "resource": {
@@ -185,7 +184,12 @@ def is_request_allowed(request: flask.Request) -> bool:
     # for attribute in other_attributes_returned:
     #     # ...AccessRequest['subject']['address'] = "new york"
     access_request = AccessRequest.from_json(AccessRequest_json)
-    return pdp.is_allowed(access_request)
+    if (pdp.is_allowed(access_request)):
+        return 1
+    elif other_attributes:
+        return 2
+    else:
+        return 0
 
 def is_policy_request(policy: dict, keys: list = []) -> bool:
     if policy is None:
