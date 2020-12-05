@@ -6,10 +6,29 @@
     <h3> userID: {{ userid }} </h3>
     <h3> Email: {{ email }} </h3>
     <h3> Address: {{ address }}</h3>
-
+    <h3> Policies: </h3>
+    <table class="policy_table">
+      <thead>
+        <th>Policy UID</th>
+        <th>Location</th>
+        <th>Action</th>
+      </thead>
+      {% for p in policies %}
+        <tr>
+            <td class="uid"> {{ p['uid'] }} </td> 
+            <td class="location"> {{ p['location'] }} </td> 
+            <td><button type="button" class="btn btn-primary delete_policy">Delete</button></td>
+        </tr>
+      {% endfor %}
+    </table>
     <form action="" method="POST">
         <button type="submit" class="btn btn-primary" name="confirm">Access</button>
     </form>
 </div>
   
 {% endblock %}
+{% block script %}
+{{ super() }}
+<script src="{{url_for('static', filename='js/about.js')}}"></script>
+<script src="{{url_for('static', filename='js/dashboard.js')}}"></script>
+{% endblock script%}

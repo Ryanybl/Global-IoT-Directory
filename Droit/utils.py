@@ -103,13 +103,14 @@ def add_policy_to_storage(policy: dict, location: str) -> bool :
         return False
     return True
 
-def delete_policy_from_storage(uid : str)  -> bool :
-    pass
-    """
+def delete_policy_from_storage(request : flask.Request)  -> bool :
+    request_json = request.get_json()
+    uid = request_json['uid']
+    location = request_json['location']
     client = MongoClient()
-    storage = MongoStorage(client)
-    storage.delete(uid = uid)
-    """
+    storage = MongoStorage(client, db_name = location)
+    storage.delete(uid)
+    return True
     
 
 # check if the request is allowed by policy in the current level
