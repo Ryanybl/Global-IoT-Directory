@@ -54,16 +54,28 @@ providers_config = {
     # providers for level3aa directory
     "level3aa": {
         "level2b": {
-            "client_id": 'sQDK1uX1R62sZf3f9AB0eTJb',
-            "client_secret": 'pkcqeqvYvzKE1zHjhRv30MFVcIDve6b4tZRmmjGf68M0ZmoK',
+            "client_id": '6rz8YK0Og7asYVHhFzyYAovE',
+            "client_secret": 'xEJQDlA1KtubXoShVfvBEVnqxBSH3VGILMPlz7CsZ3q52JZ3',
             "access_token_url": 'http://localhost:5003/auth/oidc_token',
             "access_token_params": None,
             "authorize_url": 'http://localhost:5003/auth/oidc_authorize',
             "authorize_params": None,
             "api_base_url": 'http://localhost:5003/api',
             "client_kwargs": {
-                'scope': 'openid profile',
+                'scope': 'openid profile address',
                 'token_endpoint_auth_method': 'client_secret_basic'}
         }
     }
+}
+
+oauth2_server_config = {
+    "server_url": "http://127.0.0.1:5100",
+    "client_id": "SjU1y8spVgLkig6BES3rQ2iM",
+    "client_secret": "lFY18hEJP6w8vJsAElawQTbWnPKaFtOuaNbPFciz1vxvqcRD",
+    "grant_type": "authorization_code",
+    "response_type": "code",
+    "scope": "weather",
+    "code": None,
+    "access_token": None,
+    "access_scope": []
 }

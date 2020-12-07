@@ -3,7 +3,7 @@
     "rules": {
         "subject": {
             "$.timestamp": {"condition": "Gt","value": 1605902666.793003},
-            "$.Address": {"condition": "Contains", "value": "New York"}
+            "$.Address": {"condition": "Contains", "value": "otest2badd"}
         },
         "resource": {"id": {"condition": "RegexMatch", "value": ".*"}},
         "action": [{"$.method": {"condition": "Equals", "value": "create"}},

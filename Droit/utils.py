@@ -13,6 +13,7 @@ from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
 from py_abac import PDP, Policy, AccessRequest
 from py_abac.provider.base import AttributeProvider
+import re
 
 def is_json_request(request: flask.Request, properties: list = []) -> bool:
     """Check whether the request's body could be parsed to JSON format, and all necessary properties specified by `properties` are in the JSON object
@@ -142,26 +143,37 @@ def is_request_allowed(request: flask.Request) -> bool:
                 print(f"accessed, current timestamp:{datetime.now().timestamp()}")
                 return datetime.now().timestamp()
             return None
-    class OtherAttributeProvider(AttributeProvider):
-        # def request_other_attributes(self, ace, attribute_path):
 
-        #     value = "value"
-        #     return value
+    class OtherAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace: str, attribute_path: str, ctx):
-            # redirect
-            # value = request['address']
-            other_attributes.append(attribute_path)
+            # Assume attribute_path is in the form "$.<attribute_name>"
+            attr_name = re.search("[a-zA-Z]+", attribute_path).group().lower()
+            print("attribute_path: ", attribute_path)
+            print("attr_name: ", attr_name)
+            # attr_value = flask.session.get(attr_name, None)
+            attr_value = auth_attributes.get(attr_name, None)
+            if attr_value:
+                print("attr_value: ", attr_value)
+                return attr_value
+            if attr_name not in other_attributes:
+                other_attributes.append(attr_name)
             return None
 
     # Name: ryan, Email:yunboryan@gmail.com
-    
-    
+
     request_json = request.get_json()
     thing_id = request_json['thing_id']
     policy_location = request_json['location']
 
     client = MongoClient()
-    storage = MongoStorage(client,db_name=policy_location)
+    storage = MongoStorage(client, db_name=policy_location)
+    print("storage.get_for_target(resource_id=str(thing_id)): ")
+    for p in storage.get_for_target("", str(thing_id), ""):
+        print(p)
+        # TODO: PRINT OUT AND SEE
+        p.rules.subject.keys()
+        p.rules.context.keys()
+    print(" END storage.get_for_target(resource_id=str(thing_id))")
     pdp = PDP(storage,EvaluationAlgorithm.HIGHEST_PRIORITY,[EmailAttributeProvider(),UserIdAttributeProvider(),TimestampAttributeProvider(),OtherAttributeProvider()])
 
     AccessRequest_json = {
@@ -184,12 +196,30 @@ def is_request_allowed(request: flask.Request) -> bool:
     # for attribute in other_attributes_returned:
     #     # ...AccessRequest['subject']['address'] = "new york"
     access_request = AccessRequest.from_json(AccessRequest_json)
-    if (pdp.is_allowed(access_request)):
+    other_attributes = remove_attr_accessed(other_attributes)
+    if pdp.is_allowed(access_request):
+        flask.session['authorized'] = 0
+        print("pdp.is_allowed(access_request): return 1")
         return 1
     elif other_attributes:
+        print("other_attributes: ", other_attributes)
         return 2
     else:
+        print("pdp.is_allowed(access_request): return 0")
+        flask.session['authorized'] = 0
         return 0
+
+
+def remove_attr_accessed(other_attributes):
+    for att in other_attributes:
+        if auth_attributes.get(att, None) is not None:
+            other_attributes.remove(att)
+    return other_attributes
+
+
+auth_attributes = {"address": None, "weather": None}
+policy_request = {"policy_request": None}
+
 
 def is_policy_request(policy: dict, keys: list = []) -> bool:
     if policy is None:
@@ -198,4 +228,5 @@ def is_policy_request(policy: dict, keys: list = []) -> bool:
         if key not in policy:
             return False
     return True
+
 

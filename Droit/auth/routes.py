@@ -25,12 +25,16 @@ from flask import Blueprint, render_template, request, make_response, redirect, 
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import gen_salt
 from authlib.oauth2 import OAuth2Error
+import requests
 
 from ..forms import UserRegisterForm, UserLoginForm
 from ..auth import login_manager
 from .models import auth_db, User, UserAccountTypeEnum, OAuth2Client
 from .oauth2 import oauth, authorization
 from .forms import OAuthClientRegisterForm
+from ..auth.providers_config import oauth2_server_config
+from ..utils import policy_request, auth_attributes
+from ..forms import QueryForm
 
 auth = Blueprint('auth', __name__)
 
@@ -87,7 +91,8 @@ def oidc_create_client():
 
     if request.method == 'POST' and oauth_client_form.validate():
         client_id = gen_salt(24)
-        client = OAuth2Client(client_id=client_id, scope=oauth_client_form.scope.data)  # optionally bind a user with the client
+        client = OAuth2Client(client_id=client_id,
+                              scope=oauth_client_form.scope.data)  # optionally bind a user with the client
         client.client_id_issued_at = int(time.time())
         if oauth_client_form.token_endpoint_auth_method.data == 'none':
             client.client_secret = ''
@@ -122,34 +127,40 @@ def oidc_consent_authorize():
     client_id = request.args.get('client_id', None)
     oauth_client = OAuth2Client.query.filter_by(client_id=client_id).first()
     client_scope = add_scope
-    # user is not authenticated, redirect to login page
-    if request.method == 'GET':
-        # 1. if user is not logged in, redirect to log in user
-        if current_user.is_anonymous:
-            redirect_response = redirect(url_for('auth.login', oauth_authorization=True, **request.args))
-            return redirect_response
-        # 2. check whether the client info is valid
-        try:
-            grant = authorization.validate_consent_request(end_user=current_user)
-        except OAuth2Error as error:
-            return jsonify(dict(error.get_body()))
-        # 3. ask for authorizization
-        return render_template("auth/oidc_authorize.html", grant=grant, client_scope=client_scope)
+    print("CLIENT_SCOPE = ADD_SCOPE: ", client_scope)
+    grant_user = None
+    # if logging in
+    if client_scope == "openid profile":
+        # user is not authenticated, redirect to login page
+        if request.method == 'GET':
+            # 1. if user is not logged in, redirect to log in user
+            if current_user.is_anonymous:
+                redirect_response = redirect(url_for('auth.login', oauth_authorization=True, **request.args))
+                return redirect_response
+            # 2. check whether the client info is valid
+            try:
+                grant = authorization.validate_consent_request(end_user=current_user)
+            except OAuth2Error as error:
+                return jsonify(dict(error.get_body()))
+            # 3. ask for authorization
+            return render_template("auth/oidc_authorize.html", grant=grant, client_scope=client_scope)
 
-    elif request.method == 'POST':
-        # Check user's response and respond to the replying party accordingly
-        if 'confirm' in request.form:
-            # grant_user = current_user
-            # change scope in oauth2_client
-            if oauth_client.scope != client_scope:
-                oauth_client.scope = client_scope
-                client_metadata = oauth_client.client_metadata
-                client_metadata["scope"] = oauth_client.scope
-                oauth_client.set_client_metadata(client_metadata)
-                auth_db.session.commit()
-        # else:
+        elif request.method == 'POST':
+            # Check user's response and respond to the replying party accordingly
+            if 'confirm' in request.form:
+                grant_user = current_user
+    else:
         grant_user = current_user
-        return authorization.create_authorization_response(grant_user=grant_user)
+
+    # change scope in oauth2_client
+    if oauth_client.scope != client_scope:
+        oauth_client.scope = client_scope
+        client_metadata = oauth_client.client_metadata
+        client_metadata["scope"] = oauth_client.scope
+        oauth_client.set_client_metadata(client_metadata)
+        auth_db.session.commit()
+
+    return authorization.create_authorization_response(grant_user=grant_user)
 
 
 @auth.route('oidc_token', methods=['POST'])
@@ -227,14 +238,15 @@ def oidc_auth_code_process(provider_name):
     user_scope = token['scope']
     # instead of storing into database, store in session
     if 'address' in user_scope.split():
-        session['return_address'] = user_info['address']
+        session['address'] = user_info['address']
+        auth_attributes['address'] = user_info['address']
 
     # login this user using flask-login
     login_user(user)
 
     if user_scope != 'openid profile':
-        # redirect to /about
-        return redirect(url_for('home.about'))
+        # redirect to /info_authorize
+        return redirect(url_for('auth.info_authorize'))
 
     return redirect(url_for('home.index'))
 
@@ -330,3 +342,95 @@ def verify_password(saved_hashed_password, input_raw_password):
     pwd_salt = saved_hashed_password[-32:]
 
     return saved_hashed_password == get_hashed_password(input_raw_password, pwd_salt)
+
+
+@auth.route('/info_authorize', methods=['GET', 'POST'])
+def info_authorize():
+    """
+    Ask user consent for authorizing access to other attributes,
+    retrieving from login user provider and/or external oauth server
+    In development environment run the following for the example oauth server:
+    $export AUTHLIB_INSECURE_TRANSPORT=1
+    """
+    print('info_authorize()')
+    add_user_scope = session.get('add_user_scope', '')
+    add_server_scope = session.get('add_server_scope', '')
+    add_scope = add_user_scope + ' ' + add_server_scope
+    print('add_user_scope: ' + add_user_scope + ' add_server_scope: ' + add_server_scope)
+    print('SESSION: ', session)
+    # Note: the scope added must be pre-included in providers_config (for user info)
+    if request.method == 'POST':
+        # scope authorization granted
+        if 'confirm' in request.form:
+            print('CONFIRM')
+            # scope check boxes (openid is required)
+            scope_checks = request.form.getlist('checks')
+            print("TEST: ", scope_checks)
+            session['add_user_scope'] = scope_check(add_user_scope, scope_checks)
+            session['add_server_scope'] = scope_check(add_server_scope, scope_checks)
+            add_user_scope = session['add_user_scope']
+            oauth2_server_config["access_scope"] = session['add_server_scope']
+            print('CHANGED add_user_scope: ' + add_user_scope +
+                  '; oauth2_server_config["access_scope"]: ' + oauth2_server_config["access_scope"])
+
+            # access user info
+            # if the current user logged in using oidc
+            provider = current_user.get_provider_name()
+            if provider:
+                client = oauth.create_client(provider)
+                return client.authorize_redirect(add_scope=add_user_scope)
+
+    elif request.method == 'GET':
+        # authorization for additional info started
+        if session.get('info_authorize', 1) == 0:
+            # change 'info_authorize' to one to indicate authorization started
+            session['info_authorize'] = 1
+            # grant user authorization page
+            return render_template("/auth/oauth_authorize.html", client_scope=add_scope)
+
+        if 'code' in request.args:
+            code = request.args.get('code', None)
+            files = {
+                'grant_type': (None, oauth2_server_config["grant_type"]),
+                'scope': (None, oauth2_server_config["scope"]),
+                'code': (None, code),
+            }
+            server_url = oauth2_server_config["server_url"]
+            client_id = oauth2_server_config["client_id"]
+            client_secret = oauth2_server_config["client_secret"]
+            token = requests.post(server_url + '/oauth/token', files=files, auth=(client_id, client_secret))
+            headers = {
+                'Authorization': 'Bearer ' + token.json()['access_token'],
+            }
+            info = requests.get(server_url + '/api/' + oauth2_server_config["scope"], headers=headers)
+            # pass 'temperature' info by session
+            session['temperature'] = info.json()['temperature']
+            auth_attributes['temperature'] = info.json()['temperature']
+            # clear server access scope
+            oauth2_server_config["access_scope"] = ''
+
+        add_server_scope = oauth2_server_config["access_scope"]
+        if 'temperature' in add_server_scope.split():
+            # access external server info (weather)
+            server_url = oauth2_server_config["server_url"]
+            client_id = oauth2_server_config["client_id"]
+            scope = oauth2_server_config["scope"]
+            redirect_url = server_url + "/oauth/authorize?" \
+                           + "response_type=" + oauth2_server_config["response_type"] \
+                           + "&client_id=" + client_id + "&scope=" + scope
+            return redirect(redirect_url, code=302)
+
+        # indicate the authorization has already been done
+        session['authorized'] = 1
+        # requests.post('http://localhost:5004/api/policy_decision', data=policy_request["policy_request"].data)
+        print('SESSION (before post): ', session)
+        # return redirect(url_for('api.policy_decision')) || redirect(url_for('dashboard.query'))
+        return render_template("dashboard/query.html", tagname='query', form=QueryForm())
+
+
+def scope_check(scopes, checks):
+    scope_list = scopes.split()
+    for s in scope_list:
+        if s not in ['openid', 'profile'] and s not in checks:
+            scope_list.remove(s)
+    return ' '.join(map(str, scope_list))

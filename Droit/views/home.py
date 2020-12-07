@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, request, session
+from flask import Blueprint, render_template, request, session, redirect, url_for
 from flask_login import current_user
+import requests
 
 from ..auth.oauth2 import oauth
+from ..auth.providers_config import oauth2_server_config
 
 home = Blueprint('home', __name__)
 
@@ -28,21 +30,25 @@ def about():
     userid = current_user.get_user_id()
     email = current_user.get_email()
     address = current_user.get_address()
-    if not address:
-        address = session.get('return_address', None)
-    # if the current user logged in using oidc
-    provider = current_user.get_provider_name()
-    # define additional scope needed
-    add_scope = "openid address"
-    # Note: the scope added must be pre-included in providers_config
+    # temperature = None
 
     if request.method == 'POST':
-        if 'confirm' in request.form:
-            if provider:
-                client = oauth.create_client(provider)
-                return client.authorize_redirect(add_scope=add_scope)
+        ###### TESTING ######
+        # access additional data from oauth server
+        if 'access_server' in request.form:
+            # initialize 'info_authorize' to zero to indicate authorization not yet started
+            session['info_authorize'] = 0
+            # pass scopes by session
+            session['add_user_scope'] = "openid address"
+            session['add_server_scope'] = "temperature"
+            return redirect(url_for('auth.info_authorize'))
 
-    return render_template("home/about.html", userid=userid, email=email, address=address)
+    if not address:
+        address = session.get('address', None)
+    temperature = session.get('temperature', None)
+    print("SESSION: ", session)
+    return render_template("home/about.html", userid=userid, email=email, address=address, temperature=temperature)
+
 
 @home.route('/contact')
 def contact():

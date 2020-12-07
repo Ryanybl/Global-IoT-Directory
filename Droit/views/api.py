@@ -2,13 +2,16 @@ import json
 import copy
 import requests
 import uuid
-from flask import Blueprint, request, url_for, redirect, Response, make_response, jsonify
+from flask import Blueprint, request, url_for, redirect, Response, make_response, jsonify, session, render_template
 from flask import current_app as app
 from flask_login import current_user as user
 from py_abac import PDP, AccessRequest, Policy
 from urllib.parse import urljoin, urlencode
 from ..models import ThingDescription, DirectoryNameToURL, TypeToChildrenNames, TargetToChildName
-from ..utils import get_target_url, is_json_request, clean_thing_description, add_policy_to_storage, delete_policy_from_storage, is_policy_request, is_request_allowed
+from ..utils import get_target_url, is_json_request, clean_thing_description, add_policy_to_storage,\
+    delete_policy_from_storage, is_policy_request, is_request_allowed, policy_request, auth_attributes
+from pymongo import MongoClient
+from py_abac.storage.mongo import MongoStorage
 
 
 ERROR_JSON = {"error": "Invalid request."}
@@ -326,17 +329,48 @@ def policy():
     
     return jsonify(ERROR_JSON), 400
 
-@api.route('/policy_decision', methods = ['POST'])
+
+@api.route('/policy_decision', methods=['POST'])
 def policy_decision():
-    if not is_json_request(request, ["thing_id","thing_type","action"]):
+    # if request.method == 'GET':
+    #     json_request = policy_request["policy_request"]
+    # else:
+    #     print("POST /policy_decision")
+    #     json_request = request
+    #     policy_request["policy_request"] = request
+    if not is_json_request(request, ["thing_id", "thing_type", "action"]):
         return jsonify(ERROR_JSON), 400
+
     code = is_request_allowed(request)
+    request_json = request.get_json()
+    thing_id = request_json['thing_id']
+    policy_location = request_json['location']
+
+    client = MongoClient()
+    storage = MongoStorage(client, db_name=policy_location)
+    print("storage.get_for_target(resource_id=str(thing_id)): ")
+    for p in storage.get_for_target("", str(thing_id), ""):
+        print(p)
+        # TODO: PRINT OUT AND SEE
+        p.rules.subject.keys()
+        p.rules.context.keys()
+    print(" END storage.get_for_target(resource_id=str(thing_id))")
+
     if code == 1:
         return make_response("Request Succeed", 200)
     elif code == 0:
-        return jsonify({"id" : user.get_id()}), 400
+        return jsonify({"id": user.get_id()}), 400
     else:
-        return url_for("home.about"),300
+        # initialize 'info_authorize' to zero to indicate authorization not yet started
+        session['info_authorize'] = 0
+        # pass scopes by session
+        # TODO: CHANGE THIS TO VARIABLE
+        session['add_user_scope'] = "openid address"
+        session['add_server_scope'] = "temperature"
+        auth_attributes['address'] = "unknown"
+        auth_attributes['temperature'] = "unknown"
+        return url_for("auth.info_authorize"), 300
+
 
 @api.route('/update_aggregate', methods=['POST', 'DELETE'])
 def update_type_aggregation():
