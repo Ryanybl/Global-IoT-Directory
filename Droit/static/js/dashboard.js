@@ -1,10 +1,11 @@
 const REGISTER_URL = '/api/register';
 const POLICY_URL = '/api/policy';
 const POLICY_DECISION_URL = '/api/policy_decision';
+const POLICY_DELETION_URL = '/api/delete_policy';
 const SEARCH_API = '/api/search';
 const DELETE_API = '/api/delete';
 const RELOCATE_API = '/api/relocate';
-const SCRIPT_API = '/api/custom_query'
+const SCRIPT_API = '/api/custom_query';
 
 const lock_btn = function ($button) {
     $button.prop("disabled", true);

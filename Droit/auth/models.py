@@ -34,6 +34,25 @@ class UserAccountTypeEnum(enum.Enum):
     local = 0
     oidc = 1
 
+class Policy(auth_db.Model):
+    __tablename__ = 'Policy'
+    policy_id = auth_db.Column(auth_db.Integer, nullable = False , primary_key = True)
+    uid = auth_db.Column(auth_db.String(36), nullable = False)
+    location = auth_db.Column(auth_db.String(128),nullable=False)
+    policy_json = auth_db.Column(auth_db.Text, nullable = False)
+    user_id = auth_db.Column(auth_db.Integer, auth_db.ForeignKey('user.id'),
+        nullable=False)
+    
+    def get_policy_id(self):
+        return self.policy_id
+    def get_uid(self):
+        return self.uid
+    def get_policy_json(self):
+        return self.policy_json
+    def get_location(self):
+        return self.location
+    def get_user_id(self):
+        return self.user_id
 
 class User(auth_db.Model, UserMixin):
     """ORM class that represents the user table
@@ -53,6 +72,7 @@ class User(auth_db.Model, UserMixin):
     password = auth_db.Column(auth_db.Text, nullable=False)
     account_type = auth_db.Column(auth_db.Enum(UserAccountTypeEnum))
     provider_name = auth_db.Column(auth_db.String(80))
+    policy = auth_db.relationship('Policy', backref='user', lazy=True)
 
     def __str__(self):
         return f"Name: {self.username}, Email:{self.email}"
@@ -86,6 +106,8 @@ class User(auth_db.Model, UserMixin):
     def set_address(self, address):
         self.address = address
 
+    def get_policy(self):
+        return self.policy
 
 class OAuth2Client(auth_db.Model, OAuth2ClientMixin):
     """OAuth2/OpenID Connect client application class
