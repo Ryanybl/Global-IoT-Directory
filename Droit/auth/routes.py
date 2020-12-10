@@ -33,7 +33,7 @@ from .models import auth_db, User, UserAccountTypeEnum, OAuth2Client
 from .oauth2 import oauth, authorization
 from .forms import OAuthClientRegisterForm
 from ..auth.providers_config import oauth2_server_config
-from ..utils import policy_request, auth_attributes
+from ..utils import auth_user_attributes, auth_server_attributes, clear_auth_attributes
 from ..forms import QueryForm
 
 auth = Blueprint('auth', __name__)
@@ -127,7 +127,6 @@ def oidc_consent_authorize():
     client_id = request.args.get('client_id', None)
     oauth_client = OAuth2Client.query.filter_by(client_id=client_id).first()
     client_scope = add_scope
-    print("CLIENT_SCOPE = ADD_SCOPE: ", client_scope)
     grant_user = None
     # if logging in
     if client_scope == "openid profile":
@@ -214,10 +213,8 @@ def oidc_auth_code_process(provider_name):
     token = provider.authorize_access_token()
     # get user profile using access token
     id_token = token['id_token']
-    print(token)
     try:
         user_info = jwt.decode(id_token, f'{provider_name}-secret', audience=oauth._clients[provider_name].client_id)
-        print(user_info)
     except InvalidAudienceError as e:
         print(e)
         abort(401)
@@ -238,8 +235,9 @@ def oidc_auth_code_process(provider_name):
     user_scope = token['scope']
     # instead of storing into database, store in session
     if 'address' in user_scope.split():
-        session['address'] = user_info['address']
-        auth_attributes['address'] = user_info['address']
+        # session['address'] = user_info['address']
+        auth_user_attributes['address'] = user_info['address']
+        session["info_authorize"] = 1
 
     # login this user using flask-login
     login_user(user)
@@ -267,6 +265,7 @@ def login():
         if user and verify_password(user.password, user_form.password.data):
             # login success, record it using flask-login
             login_user(user, remember=user_form.remember_me)
+            clear_auth_attributes()
             # check whether it's from authorize page. If so, redirect back, with same request parameters
             if "oauth_authorization" in request.args:
                 return redirect(url_for('auth.oidc_consent_authorize', **request.args))
@@ -299,7 +298,7 @@ def register():
             auth_db.session.commit()
             # login success, record it using flask-login
             login_user(new_user)
-
+            clear_auth_attributes()
             return redirect(url_for('home.index'))
         else:
             # User already exist, return to the register page and show the error
@@ -356,76 +355,76 @@ def info_authorize():
     add_user_scope = session.get('add_user_scope', '')
     add_server_scope = session.get('add_server_scope', '')
     add_scope = add_user_scope + ' ' + add_server_scope
-    print('add_user_scope: ' + add_user_scope + ' add_server_scope: ' + add_server_scope)
-    print('SESSION: ', session)
     # Note: the scope added must be pre-included in providers_config (for user info)
     if request.method == 'POST':
         # scope authorization granted
         if 'confirm' in request.form:
-            print('CONFIRM')
             # scope check boxes (openid is required)
             scope_checks = request.form.getlist('checks')
-            print("TEST: ", scope_checks)
             session['add_user_scope'] = scope_check(add_user_scope, scope_checks)
             session['add_server_scope'] = scope_check(add_server_scope, scope_checks)
             add_user_scope = session['add_user_scope']
             oauth2_server_config["access_scope"] = session['add_server_scope']
-            print('CHANGED add_user_scope: ' + add_user_scope +
-                  '; oauth2_server_config["access_scope"]: ' + oauth2_server_config["access_scope"])
-
             # access user info
             # if the current user logged in using oidc
             provider = current_user.get_provider_name()
             if provider:
                 client = oauth.create_client(provider)
                 return client.authorize_redirect(add_scope=add_user_scope)
+            else:
+                auth_user_attributes['address'] = current_user.get_address()
+                session["info_authorize"] = 1
+                return redirect(url_for('auth.info_authorize'))
+        # redirect back to query page if "cancel"
+        return redirect(url_for('dashboard.query'))
 
     elif request.method == 'GET':
         # authorization for additional info started
-        if session.get('info_authorize', 1) == 0:
+        if session.get('info_authorize', None) == 0:
             # change 'info_authorize' to one to indicate authorization started
             session['info_authorize'] = 1
             # grant user authorization page
             return render_template("/auth/oauth_authorize.html", client_scope=add_scope)
 
-        if 'code' in request.args:
-            code = request.args.get('code', None)
-            files = {
-                'grant_type': (None, oauth2_server_config["grant_type"]),
-                'scope': (None, oauth2_server_config["scope"]),
-                'code': (None, code),
-            }
-            server_url = oauth2_server_config["server_url"]
-            client_id = oauth2_server_config["client_id"]
-            client_secret = oauth2_server_config["client_secret"]
-            token = requests.post(server_url + '/oauth/token', files=files, auth=(client_id, client_secret))
-            headers = {
-                'Authorization': 'Bearer ' + token.json()['access_token'],
-            }
-            info = requests.get(server_url + '/api/' + oauth2_server_config["scope"], headers=headers)
-            # pass 'temperature' info by session
-            session['temperature'] = info.json()['temperature']
-            auth_attributes['temperature'] = info.json()['temperature']
-            # clear server access scope
-            oauth2_server_config["access_scope"] = ''
-
         add_server_scope = oauth2_server_config["access_scope"]
-        if 'temperature' in add_server_scope.split():
-            # access external server info (weather)
-            server_url = oauth2_server_config["server_url"]
-            client_id = oauth2_server_config["client_id"]
-            scope = oauth2_server_config["scope"]
-            redirect_url = server_url + "/oauth/authorize?" \
-                           + "response_type=" + oauth2_server_config["response_type"] \
-                           + "&client_id=" + client_id + "&scope=" + scope
-            return redirect(redirect_url, code=302)
+        if 'code' in request.args:
+            server_authorize(oauth2_server_config, 'temperature', request)
 
-        # indicate the authorization has already been done
-        session['authorized'] = 1
-        # requests.post('http://localhost:5004/api/policy_decision', data=policy_request["policy_request"].data)
-        print('SESSION (before post): ', session)
-        # return redirect(url_for('api.policy_decision')) || redirect(url_for('dashboard.query'))
-        return render_template("dashboard/query.html", tagname='query', form=QueryForm())
+        if len(add_server_scope.split()) > 0:
+            return server_auth_request(oauth2_server_config)
+
+        return redirect(url_for('dashboard.query'))
+
+
+def server_auth_request(server_config):
+    # access external server info (weather)
+    server_url = server_config["server_url"]
+    client_id = server_config["client_id"]
+    scope = server_config["scope"]
+    redirect_url = server_url + "/oauth/authorize?" \
+                   + "response_type=" + server_config["response_type"] \
+                   + "&client_id=" + client_id + "&scope=" + scope
+    return redirect(redirect_url, code=302)
+
+
+def server_authorize(server_config, attr_name, get_request):
+    code = get_request.args.get('code', None)
+    files = {
+        'grant_type': (None, server_config["grant_type"]),
+        'scope': (None, server_config["scope"]),
+        'code': (None, code),
+    }
+    server_url = server_config["server_url"]
+    client_id = server_config["client_id"]
+    client_secret = server_config["client_secret"]
+    token = requests.post(server_url + '/oauth/token', files=files, auth=(client_id, client_secret))
+    headers = {
+        'Authorization': 'Bearer ' + token.json()['access_token'],
+    }
+    info = requests.get(server_url + '/api/' + server_config["scope"], headers=headers)
+    auth_server_attributes[attr_name] = info.json()[attr_name]
+    # clear server access scope
+    server_config["access_scope"] = ''
 
 
 def scope_check(scopes, checks):

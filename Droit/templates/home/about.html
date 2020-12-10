@@ -1,12 +1,12 @@
 {% extends "layout.html" %}
 {% block body %}
 <div class="container">
-  About the project.
+    <h2>User Profile</h2>
 
-    <h3> userID: {{ userid }} </h3>
-    <h3> Email: {{ email }} </h3>
-    <h3> Address: {{ address }}</h3>
-    <h3> Temperature: {{ temperature }} </h3>
+    <h4> userID: {{ userid }} </h4>
+    <h4> Email: {{ email }} </h4>
+    <h4> Address: {{ address }}</h4>
+    <br>
     <h3> Policies: </h3>
     <table class="policy_table">
       <thead>
@@ -22,10 +22,6 @@
         </tr>
       {% endfor %}
     </table>
-    <form action="" method="POST">
-        <button type="submit" class="btn btn-primary" name="access_user">Access</button>
-        <button type="submit" class="btn btn-primary" name="access_server">Access Server</button>
-    </form>
 </div>
   
 {% endblock %}

@@ -93,6 +93,7 @@ def get_target_url(location: str, api: str = "") -> str:
 
     return target_url
 
+
 def add_policy_to_storage(policy: dict, location: str) -> bool :
     #json = request.get_json()
     policy = Policy.from_json(policy)
@@ -103,6 +104,7 @@ def add_policy_to_storage(policy: dict, location: str) -> bool :
     except:
         return False
     return True
+
 
 def delete_policy_from_storage(request : flask.Request)  -> bool :
     request_json = request.get_json()
@@ -116,13 +118,11 @@ def delete_policy_from_storage(request : flask.Request)  -> bool :
 
 # check if the request is allowed by policy in the current level
 def is_request_allowed(request: flask.Request) -> bool:
-    other_attributes = []
-
     class UserIdAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace, attribute_path,ctx):
-            if (not current_user):
+            if not current_user:
                 return None
-            if(ace == "subject" and attribute_path == "$.id"):
+            if ace == "subject" and attribute_path == "$.id":
                 return current_user.get_user_id()
             return None
             
@@ -131,8 +131,8 @@ def is_request_allowed(request: flask.Request) -> bool:
             user_id = ctx.get_attribute_value("subject","$.id")
             if not user_id:
                 return None
-            if(ace == "subject" and attribute_path == "$.email"):
-                user = User.query.filter_by(id = user_id).first()
+            if ace == "subject" and attribute_path == "$.email":
+                user = User.query.filter_by(id=user_id).first()
                 user_email = user.get_email()
                 return user_email
             return None
@@ -140,7 +140,7 @@ def is_request_allowed(request: flask.Request) -> bool:
     class TimestampAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace, attribute_path,ctx):
             print(f"accessed 1, timestamp")
-            if(attribute_path == "$.timestamp"):
+            if attribute_path == "$.timestamp":
                 print(f"accessed, current timestamp:{datetime.now().timestamp()}")
                 return datetime.now().timestamp()
             return None
@@ -151,16 +151,9 @@ def is_request_allowed(request: flask.Request) -> bool:
             attr_name = re.search("[a-zA-Z]+", attribute_path).group().lower()
             print("attribute_path: ", attribute_path)
             print("attr_name: ", attr_name)
-            # attr_value = flask.session.get(attr_name, None)
-            attr_value = auth_attributes.get(attr_name, None)
-            if attr_value:
-                print("attr_value: ", attr_value)
-                return attr_value
-            if attr_name not in other_attributes:
-                other_attributes.append(attr_name)
-            return None
-
-    # Name: ryan, Email:yunboryan@gmail.com
+            attr_value = auth_user_attributes.get(attr_name, None) or auth_server_attributes.get(attr_name, None)
+            print("attr_value: ", attr_value)
+            return attr_value
 
     request_json = request.get_json()
     thing_id = request_json['thing_id']
@@ -168,16 +161,9 @@ def is_request_allowed(request: flask.Request) -> bool:
 
     client = MongoClient()
     storage = MongoStorage(client, db_name=policy_location)
-    print("storage.get_for_target(resource_id=str(thing_id)): ")
-    for p in storage.get_for_target("", str(thing_id), ""):
-        print(p)
-        # TODO: PRINT OUT AND SEE
-        p.rules.subject.keys()
-        p.rules.context.keys()
-    print(" END storage.get_for_target(resource_id=str(thing_id))")
     pdp = PDP(storage,EvaluationAlgorithm.HIGHEST_PRIORITY,[EmailAttributeProvider(),UserIdAttributeProvider(),TimestampAttributeProvider(),OtherAttributeProvider()])
 
-    AccessRequest_json = {
+    access_request_json = {
         "subject": {
             "id": '', 
             "attributes": {}
@@ -194,32 +180,27 @@ def is_request_allowed(request: flask.Request) -> bool:
             "timestamp":{}
         }
     }
-    # for attribute in other_attributes_returned:
-    #     # ...AccessRequest['subject']['address'] = "new york"
-    access_request = AccessRequest.from_json(AccessRequest_json)
-    other_attributes = remove_attr_accessed(other_attributes)
+
+    access_request = AccessRequest.from_json(access_request_json)
+    # other_attributes = remove_attr_accessed(other_attributes)
     if pdp.is_allowed(access_request):
-        flask.session['authorized'] = 0
-        print("pdp.is_allowed(access_request): return 1")
         return 1
-    elif other_attributes:
-        print("other_attributes: ", other_attributes)
-        return 2
     else:
-        print("pdp.is_allowed(access_request): return 0")
-        flask.session['authorized'] = 0
         return 0
 
 
-def remove_attr_accessed(other_attributes):
-    for att in other_attributes:
-        if auth_attributes.get(att, None) is not None:
-            other_attributes.remove(att)
-    return other_attributes
+"""
+Lists of attributes that can be accessed from user provider or external oauth2 server
+"""
+auth_user_attributes = {"address": None}
+auth_server_attributes = {"temperature": None}
 
 
-auth_attributes = {"address": None, "weather": None}
-policy_request = {"policy_request": None}
+def clear_auth_attributes():
+    for k in auth_user_attributes.keys():
+        auth_user_attributes[k] = None
+    for s in auth_server_attributes.keys():
+        auth_server_attributes[s] = None
 
 
 def is_policy_request(policy: dict, keys: list = []) -> bool:

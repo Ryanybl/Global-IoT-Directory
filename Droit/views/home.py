@@ -4,6 +4,7 @@ from ..auth.oauth2 import oauth
 import json
 home = Blueprint('home', __name__)
 
+
 @home.route('/')
 @home.route('/index')
 @home.route('/home')
@@ -23,45 +24,22 @@ def about():
     Returns:
         response: the flask response object representing the HTML page
     """
-
+    if current_user.is_anonymous:
+        # redirect to login page if not logged in
+        return redirect(url_for('auth.login'))
     userid = current_user.get_user_id()
     email = current_user.get_email()
     address = current_user.get_address()
     policies = []
     for p in current_user.get_policy():
-        cur = {}
-        cur['uid'] = p.get_uid()
-        cur['location'] = p.get_location()
-        cur['policy_json'] = p.get_policy_json()
+        cur = {'uid': p.get_uid(), 'location': p.get_location(), 'policy_json': p.get_policy_json()}
         policies.append(cur)
     print(policies)
     print(current_user.get_policy())
     if not address:
-        address = session.get('return_address', None)
-    # if the current user logged in using oidc
-    provider = current_user.get_provider_name()
-    # define additional scope needed
-    add_scope = "openid address"
-    # Note: the scope added must be pre-included in providers_config
-
-    if request.method == 'POST':
-        ###### TESTING ######
-        # access additional data from oauth server
-        if 'access_server' in request.form:
-            # initialize 'info_authorize' to zero to indicate authorization not yet started
-            session['info_authorize'] = 0
-            # pass scopes by session
-            session['add_user_scope'] = "openid address"
-            session['add_server_scope'] = "temperature"
-            return redirect(url_for('auth.info_authorize'))
-
-    if not address:
         address = session.get('address', None)
-    temperature = session.get('temperature', None)
-    print("SESSION: ", session)
-    return render_template("home/about.html", userid=userid, email=email, address=address, temperature=temperature)
-
     return render_template("home/about.html", userid=userid, email=email, address=address, policies = policies)
+
 
 @home.route('/contact')
 def contact():

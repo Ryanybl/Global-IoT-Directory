@@ -34,7 +34,40 @@ $(".result table tbody").on("click", ".request", function () {
         }
     });
     unlock_btn(requestBtn);
-}); 
+});
+
+
+$(".result table tbody").on("click", ".authorize", function () {
+    let thingDescription = $(this).siblings('div').text().trim();
+    jsonFormatter.setJSONString(thingDescription);
+    let requestBtn = $(this)
+    action = 'get' //currently considering only get requests
+    thing_json = JSON.parse(thingDescription)
+    thing_json['action'] = action
+    thing_json['location'] = searched_location
+
+    lock_btn(requestBtn);
+    $.ajax({
+        url: ATTRIBUTE_AUTH_URL,
+        type: "POST",
+        data: JSON.stringify(thing_json),
+        contentType: "application/json",
+        error: function (jqXHR, textStatus, errorThrown) {
+            unlock_btn(requestBtn);
+            if (jqXHR.status == 300) {
+                window.location.href=jqXHR.responseText;
+            } else {
+                show_prompt("Authorization failed")
+            }
+        },
+        success: function (data, textStatus, jqXHR) {
+            unlock_btn(requestBtn);
+            show_prompt("No attribute authorization required")
+        }
+    });
+    unlock_btn(requestBtn);
+});
+
 
 // Register click event for the 'search' button
 $("#search").click(function () {
@@ -64,6 +97,12 @@ $("#search").click(function () {
                 <td>${element.thing_id}</td>
                 <td>${element.thing_type}</td>
                 <td>${element.title}</td>
+                <td>
+                    <button class="btn btn-primary authorize">Authorize</button>
+                    <div hidden>
+                        ${JSON.stringify(element)}
+                    </div>
+                </td>
                 <td>
                     <button class="btn btn-primary request">Request</button>
                     <div hidden>

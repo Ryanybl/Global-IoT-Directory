@@ -2,6 +2,7 @@ import json
 import copy
 import requests
 import uuid
+import re
 from flask import Blueprint, request, url_for, redirect, Response, make_response, jsonify, session, render_template
 from flask import current_app as app
 from flask_login import current_user as user
@@ -9,10 +10,10 @@ from py_abac import PDP, AccessRequest, Policy
 from urllib.parse import urljoin, urlencode
 from ..models import ThingDescription, DirectoryNameToURL, TypeToChildrenNames, TargetToChildName
 from ..utils import get_target_url, is_json_request, clean_thing_description, add_policy_to_storage,\
-    delete_policy_from_storage, is_policy_request, is_request_allowed, policy_request, auth_attributes
+    delete_policy_from_storage, is_policy_request, is_request_allowed, auth_user_attributes, auth_server_attributes
 from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
-
+from ..auth.models import auth_db
 
 ERROR_JSON = {"error": "Invalid request."}
 ERROR_POLICY = {"error": "Invalid policy."}
@@ -340,46 +341,58 @@ def policy():
     return jsonify(ERROR_JSON), 400
 
 
-@api.route('/policy_decision', methods=['POST'])
-def policy_decision():
-    # if request.method == 'GET':
-    #     json_request = policy_request["policy_request"]
-    # else:
-    #     print("POST /policy_decision")
-    #     json_request = request
-    #     policy_request["policy_request"] = request
+@api.route('/policy_attribute_auth', methods=['POST'])
+def policy_attr_auth():
     if not is_json_request(request, ["thing_id", "thing_type", "action"]):
         return jsonify(ERROR_JSON), 400
 
-    code = is_request_allowed(request)
     request_json = request.get_json()
     thing_id = request_json['thing_id']
     policy_location = request_json['location']
 
     client = MongoClient()
     storage = MongoStorage(client, db_name=policy_location)
-    print("storage.get_for_target(resource_id=str(thing_id)): ")
+    add_user_scope = ["openid"]
+    add_server_scope = []
+    add_user_scope_str = ""
+    add_server_scope_str = ""
     for p in storage.get_for_target("", str(thing_id), ""):
-        print(p)
-        # TODO: PRINT OUT AND SEE
-        p.rules.subject.keys()
-        p.rules.context.keys()
-    print(" END storage.get_for_target(resource_id=str(thing_id))")
+        add_user_scope_str = get_auth_scopes(add_user_scope, p.rules.subject.keys(), auth_user_attributes)
+        add_server_scope_str = get_auth_scopes(add_server_scope, p.rules.context.keys(), auth_server_attributes)
+    print("add_user_scope_str: ", add_user_scope_str)
+    print("add_server_scope_str: ", add_server_scope_str)
 
+    # authorize and access the required attributes
+    if len(add_user_scope_str) > 0 or len(add_server_scope_str) > 0:
+        # initialize 'info_authorize' to zero to indicate authorization not yet started
+        session['info_authorize'] = 0
+        # pass scopes by session
+        session['add_user_scope'] = add_user_scope_str
+        session['add_server_scope'] = add_server_scope_str
+        return url_for("auth.info_authorize"), 300
+
+    return make_response("Request Succeed", 200)
+
+
+@api.route('/policy_decision', methods=['POST'])
+def policy_decision():
+    if not is_json_request(request, ["thing_id", "thing_type", "action"]):
+        return jsonify(ERROR_JSON), 400
+    code = is_request_allowed(request)
     if code == 1:
         return make_response("Request Succeed", 200)
     elif code == 0:
         return jsonify({"id": user.get_id()}), 400
-    else:
-        # initialize 'info_authorize' to zero to indicate authorization not yet started
-        session['info_authorize'] = 0
-        # pass scopes by session
-        # TODO: CHANGE THIS TO VARIABLE
-        session['add_user_scope'] = "openid address"
-        session['add_server_scope'] = "temperature"
-        auth_attributes['address'] = "unknown"
-        auth_attributes['temperature'] = "unknown"
-        return url_for("auth.info_authorize"), 300
+
+
+def get_auth_scopes(auth_scope, attr_list, auth_attributes):
+    for s in attr_list:
+        attr_name = re.search("[a-zA-Z]+", s).group().lower()
+        if (attr_name not in auth_scope) and (attr_name in auth_attributes):
+            if not auth_attributes.get(attr_name, None):
+                auth_scope.append(attr_name)
+                auth_attributes[attr_name] = "unknown"
+    return " ".join(auth_scope)
 
 
 @api.route('/delete_policy', methods=['POST'])

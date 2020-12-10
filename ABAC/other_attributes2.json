@@ -1,0 +1,21 @@
+{"description": "Require other attributes.",
+    "effect": "allow",
+    "rules": {
+        "subject": {
+            "$.timestamp": {"condition": "Gt","value": 1605902666.793003},
+            "$.Address": {"condition": "Contains", "value": "otest2badd"}
+        },
+        "resource": {"id": {"condition": "RegexMatch", "value": ".*"}},
+        "action": [{"$.method": {"condition": "Equals", "value": "create"}},
+                   {"$.method": {"condition": "Equals", "value": "delete"}},
+                   {"$.method": {"condition": "Equals", "value": "get"}}],
+        "context": {
+            "$.temperature": {
+                "condition": "Lte",
+                "value": 18
+            }
+        }
+    },
+    "targets": {},
+    "priority": 1
+}
