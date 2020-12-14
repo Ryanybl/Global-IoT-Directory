@@ -353,7 +353,7 @@ def policy_attr_auth():
 
     client = MongoClient()
     storage = MongoStorage(client, db_name=policy_location)
-    add_user_scope = ["openid"]
+    add_user_scope = []
     add_server_scope = []
     add_user_scope_str = ""
     add_server_scope_str = ""
@@ -379,6 +379,8 @@ def policy_attr_auth():
 def policy_decision():
     if not is_json_request(request, ["thing_id", "thing_type", "action"]):
         return jsonify(ERROR_JSON), 400
+    print("request request")
+    print(request)
     code = is_request_allowed(request)
     if code == 1:
         return make_response("Request Succeed", 200)
@@ -388,11 +390,10 @@ def policy_decision():
 
 def get_auth_scopes(auth_scope, attr_list, auth_attributes):
     for s in attr_list:
-        attr_name = re.search("[a-zA-Z]+", s).group().lower()
+        attr_name = re.search("[a-zA-Z_]+", s).group().lower()
         if (attr_name not in auth_scope) and (attr_name in auth_attributes):
             if not auth_attributes.get(attr_name, None):
                 auth_scope.append(attr_name)
-                auth_attributes[attr_name] = "unknown"
     return " ".join(auth_scope)
 
 

@@ -33,7 +33,7 @@ from .models import auth_db, User, UserAccountTypeEnum, OAuth2Client
 from .oauth2 import oauth, authorization
 from .forms import OAuthClientRegisterForm
 from ..auth.providers_config import oauth2_server_config
-from ..utils import auth_user_attributes, auth_server_attributes, clear_auth_attributes
+from ..utils import set_auth_user_attr, auth_server_attributes, clear_auth_attributes
 from ..forms import QueryForm
 
 auth = Blueprint('auth', __name__)
@@ -233,11 +233,11 @@ def oidc_auth_code_process(provider_name):
 
     # set additional scope
     user_scope = token['scope']
-    # instead of storing into database, store in session
+    # store additional user attributes in auth_user_attributes dictionary
     if 'address' in user_scope.split():
-        # session['address'] = user_info['address']
-        auth_user_attributes['address'] = user_info['address']
-        session["info_authorize"] = 1
+        set_auth_user_attr('address', user_info['address'])
+    if 'phone_number' in user_scope.split():
+        set_auth_user_attr('phone_number', user_info['phone_number'])
 
     # login this user using flask-login
     login_user(user)
@@ -292,6 +292,7 @@ def register():
             new_user = User(username=user_form.username.data,
                             email=user_form.email.data,
                             address=user_form.address.data,
+                            phone_number=user_form.phone_number.data,
                             password=get_hashed_password(user_form.password.data),
                             account_type=UserAccountTypeEnum.local)  # local user register
             auth_db.session.add(new_user)
@@ -355,16 +356,21 @@ def info_authorize():
     add_user_scope = session.get('add_user_scope', '')
     add_server_scope = session.get('add_server_scope', '')
     add_scope = add_user_scope + ' ' + add_server_scope
+    add_user_scope = "openid " + add_user_scope
     # Note: the scope added must be pre-included in providers_config (for user info)
     if request.method == 'POST':
         # scope authorization granted
         if 'confirm' in request.form:
             # scope check boxes (openid is required)
             scope_checks = request.form.getlist('checks')
+            print("scope_checks scope_checks scope_checks scope_checks scope_checks")
+            print("scope_checks: ", scope_checks)
             session['add_user_scope'] = scope_check(add_user_scope, scope_checks)
             session['add_server_scope'] = scope_check(add_server_scope, scope_checks)
             add_user_scope = session['add_user_scope']
+            print("BEFORE oauth2_server_config[access_scope]:", oauth2_server_config["access_scope"])
             oauth2_server_config["access_scope"] = session['add_server_scope']
+            print("AFTER oauth2_server_config[access_scope]:", oauth2_server_config["access_scope"])
             # access user info
             # if the current user logged in using oidc
             provider = current_user.get_provider_name()
@@ -372,8 +378,8 @@ def info_authorize():
                 client = oauth.create_client(provider)
                 return client.authorize_redirect(add_scope=add_user_scope)
             else:
-                auth_user_attributes['address'] = current_user.get_address()
-                session["info_authorize"] = 1
+                set_auth_user_attr('address', current_user.get_address())
+                set_auth_user_attr('phone_number', current_user.get_phone())
                 return redirect(url_for('auth.info_authorize'))
         # redirect back to query page if "cancel"
         return redirect(url_for('dashboard.query'))
@@ -388,9 +394,10 @@ def info_authorize():
 
         add_server_scope = oauth2_server_config["access_scope"]
         if 'code' in request.args:
-            server_authorize(oauth2_server_config, 'temperature', request)
+            server_authorize(oauth2_server_config, add_server_scope.split(), request)
 
-        if len(add_server_scope.split()) > 0:
+        if len(add_server_scope.split()) > 0 and session.get('info_authorize', 0) != 2:
+            print("add_server_scope.split(): ", add_server_scope.split())
             return server_auth_request(oauth2_server_config)
 
         return redirect(url_for('dashboard.query'))
@@ -404,10 +411,12 @@ def server_auth_request(server_config):
     redirect_url = server_url + "/oauth/authorize?" \
                    + "response_type=" + server_config["response_type"] \
                    + "&client_id=" + client_id + "&scope=" + scope
+    # change 'info_authorize' to 2 to indicate server authorization started
+    session['info_authorize'] = 2
     return redirect(redirect_url, code=302)
 
 
-def server_authorize(server_config, attr_name, get_request):
+def server_authorize(server_config, attr_names, get_request):
     code = get_request.args.get('code', None)
     files = {
         'grant_type': (None, server_config["grant_type"]),
@@ -422,14 +431,17 @@ def server_authorize(server_config, attr_name, get_request):
         'Authorization': 'Bearer ' + token.json()['access_token'],
     }
     info = requests.get(server_url + '/api/' + server_config["scope"], headers=headers)
-    auth_server_attributes[attr_name] = info.json()[attr_name]
+    for attr_name in attr_names:
+        auth_server_attributes[attr_name] = info.json()[attr_name]
     # clear server access scope
     server_config["access_scope"] = ''
 
 
 def scope_check(scopes, checks):
     scope_list = scopes.split()
+    scope_output = []
     for s in scope_list:
-        if s not in ['openid', 'profile'] and s not in checks:
-            scope_list.remove(s)
-    return ' '.join(map(str, scope_list))
+        if (s in ['openid', 'profile']) or (s in checks):
+            scope_output.append(s)
+    return ' '.join(map(str, scope_output))
+
