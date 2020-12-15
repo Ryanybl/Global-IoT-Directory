@@ -1,10 +1,15 @@
-
-const jsonFormatter = new JSONFormatter("json-thingdescription", false)
+const request_jsonFormatter = new JSONFormatter("json-thingdescription", false)
 const $tdModal = $("#thing_description_modal");
+const jwt_jsonFormatter = new JSONFormatter("json-jwt", false)
+const $jwtModal = $("#jwt_modal");
 var searched_location
+var things = {}
+
+
 $(".result table tbody").on("click", ".request", function () {
-    let thingDescription = $(this).siblings('div').text().trim();
-    jsonFormatter.setJSONString(thingDescription);
+    let thingDescription = things[$(this).closest('tr').find("td.thing_id").text().trim()];
+    request_jsonFormatter.setJSONString(thingDescription);
+    console.log(thingDescription)
     let requestBtn = $(this)
 
     action = 'get' //currently considering only get requests
@@ -36,10 +41,8 @@ $(".result table tbody").on("click", ".request", function () {
     unlock_btn(requestBtn);
 });
 
-
 $(".result table tbody").on("click", ".authorize", function () {
-    let thingDescription = $(this).siblings('div').text().trim();
-    jsonFormatter.setJSONString(thingDescription);
+    let thingDescription = things[$(this).closest('tr').find("td.thing_id").text().trim()];
     let requestBtn = $(this)
     action = 'get' //currently considering only get requests
     thing_json = JSON.parse(thingDescription)
@@ -69,6 +72,50 @@ $(".result table tbody").on("click", ".authorize", function () {
 });
 
 
+$(".result table tbody").on("click", ".jwt", function () {
+    let thingDescription = things[$(this).closest('tr').find("td.thing_id").text().trim()];
+    thing_json = JSON.parse(thingDescription)
+    thing_json['location'] = searched_location
+    action = 'get' //currently considering only get requests
+    thing_json['action'] = action
+    lock_btn($(this));
+
+    // First check if user is authorized to access
+    $.ajax({
+        url: POLICY_DECISION_URL,
+        type: "POST",
+        data: JSON.stringify(thing_json),
+        contentType: "application/json",
+        error: function (jqXHR, textStatus, errorThrown) {
+            unlock_btn(requestBtn);
+            if(jqXHR.status == 300){
+                window.location.href=jqXHR.responseText;
+            }else{
+                show_prompt("Access denied")
+            }
+                
+        },
+        success: function (data, textStatus, jqXHR) {
+            thing_id = thing_json['thing_id']
+            request_url = `${JWT_API}?thing_id=${thing_id}`
+            // return jwt is access granted
+            fetch(request_url)
+                .then(response => response.json())
+                .then(data => {
+                    // Show result list 
+                    jwt_jsonFormatter.setJSONString(JSON.stringify(data));
+                    $jwtModal.modal('show')
+                    unlock_btn($(this));
+                })
+                .catch(response => {
+                    show_prompt('Request failed' + response);
+                    unlock_btn($(this));
+                });
+        }
+    });
+    unlock_btn($(this));
+});
+
 // Register click event for the 'search' button
 $("#search").click(function () {
     let form_data = $(".register-form").serialize();
@@ -94,24 +141,21 @@ $("#search").click(function () {
             $tableBody.html("");
             data.forEach(element => {
                 $tableBody.append(`<tr>
-                <td>${element.thing_id}</td>
+                <td class="thing_id">${element.thing_id}</td>
                 <td>${element.thing_type}</td>
                 <td>${element.title}</td>
                 <td>
                     <button class="btn btn-primary authorize">Authorize</button>
-                    <div hidden>
-                        ${JSON.stringify(element)}
-                    </div>
                 </td>
                 <td>
                     <button class="btn btn-primary request">Request</button>
-                    <div hidden>
-                        ${JSON.stringify(element)}
-                    </div>
+                </td>
+                <td>
+                    <button class="btn btn-primary jwt">Generate</button>
                 </td>
                 </tr>`);
+                things[element.thing_id] = JSON.stringify(element)
             });
-
             unlock_btn($(this));
         })
         .catch(response => {

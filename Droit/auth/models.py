@@ -85,6 +85,8 @@ class User(auth_db.Model, UserMixin):
         return self.id
     def get_email(self):
         return self.email
+    def get_username(self):
+        return self.username
         
     def get_id(self):
         """A user identification method required by flask-login
