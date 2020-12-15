@@ -2,6 +2,8 @@
 Functions declared in this file are helper functions that can be shared by all other modules
 """
 import flask
+import jwcrypto.jwk as jwk
+import jwt
 from urllib.parse import urljoin
 from datetime import datetime
 from flask.helpers import url_for
@@ -225,4 +227,13 @@ def is_policy_request(policy: dict, keys: list = []) -> bool:
             return False
     return True
 
+# encode given payload to jwt, return encoded jwt, private key, public key
+def generate_jwt(payload):
+    jwk_key = jwk.JWK.generate(kty='RSA', size=2048)
+    priv_key = jwk_key.export_to_pem(private_key=True, password=None)
+    pub_key = jwk_key.export_to_pem(password=None)
+    encoded_jwt = jwt.encode(payload, priv_key, algorithm='RS256')
+    return encoded_jwt, priv_key, pub_key
 
+def jwt_to_thing(encoded_jwt, priv_key, algorithm = 'RS256'):
+    return jwt.decode(encoded_jwt,priv_key, algorithm = algorithm)
