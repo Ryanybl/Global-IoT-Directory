@@ -389,6 +389,9 @@ def policy_decision():
 
 
 def get_auth_scopes(auth_scope, attr_list, auth_attributes):
+    # initialize user attributes from profile info, if already exists
+    auth_user_attributes["address"] = user.get_address()
+    auth_user_attributes["phone_number"] = user.get_phone()
     for s in attr_list:
         attr_name = re.search("[a-zA-Z_]+", s).group().lower()
         if (attr_name not in auth_scope) and (attr_name in auth_attributes):

@@ -155,7 +155,6 @@ def is_request_allowed(request: flask.Request) -> bool:
 
     class OtherAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace: str, attribute_path: str, ctx):
-
             # Assume attribute_path is in the form "$.<attribute_name>"
             attr_name = re.search("[a-zA-Z_]+", attribute_path).group().lower()
             print("attribute_path: ", attribute_path)
