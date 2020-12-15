@@ -18,3 +18,7 @@
   
 ### providers_config.py
 `"client_kwargs": "scope"`
+
+
+## Note for example oauth2 server
+- Run `export AUTHLIB_INSECURE_TRANSPORT=1` in command line before starting the server.

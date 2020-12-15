@@ -358,8 +358,10 @@ def policy_attr_auth():
     add_user_scope_str = ""
     add_server_scope_str = ""
     for p in storage.get_for_target("", str(thing_id), ""):
-        add_user_scope_str = get_auth_scopes(add_user_scope, p.rules.subject.keys(), auth_user_attributes)
-        add_server_scope_str = get_auth_scopes(add_server_scope, p.rules.context.keys(), auth_server_attributes)
+        subject_rules = get_attr_list(p.rules.subject)
+        context_rules = get_attr_list(p.rules.context)
+        add_user_scope_str = get_auth_scopes(add_user_scope, subject_rules, auth_user_attributes)
+        add_server_scope_str = get_auth_scopes(add_server_scope, context_rules, auth_server_attributes)
     print("add_user_scope_str: ", add_user_scope_str)
     print("add_server_scope_str: ", add_server_scope_str)
 
@@ -375,12 +377,19 @@ def policy_attr_auth():
     return make_response("Request Succeed", 200)
 
 
+def get_attr_list(policy_rules):
+    if isinstance(policy_rules, list):
+        rule_dict = {}
+        for rule in policy_rules:
+            rule_dict.update(rule)
+        return rule_dict.keys()
+    return policy_rules.keys()
+
+
 @api.route('/policy_decision', methods=['POST'])
 def policy_decision():
     if not is_json_request(request, ["thing_id", "thing_type", "action"]):
         return jsonify(ERROR_JSON), 400
-    print("request request")
-    print(request)
     code = is_request_allowed(request)
     if code == 1:
         return make_response("Request Succeed", 200)
@@ -390,8 +399,10 @@ def policy_decision():
 
 def get_auth_scopes(auth_scope, attr_list, auth_attributes):
     # initialize user attributes from profile info, if already exists
-    auth_user_attributes["address"] = user.get_address()
-    auth_user_attributes["phone_number"] = user.get_phone()
+    if not auth_user_attributes["address"]:
+        auth_user_attributes["address"] = user.get_address()
+    if not auth_user_attributes["phone_number"]:
+        auth_user_attributes["phone_number"] = user.get_phone()
     for s in attr_list:
         attr_name = re.search("[a-zA-Z_]+", s).group().lower()
         if (attr_name not in auth_scope) and (attr_name in auth_attributes):
