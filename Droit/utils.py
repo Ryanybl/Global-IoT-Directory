@@ -113,15 +113,23 @@ def delete_policy_from_storage(request : flask.Request)  -> bool :
     uid = request_json['uid']
     location = request_json['location']
     client = MongoClient()
-    storage = MongoStorage(client, db_name = location)
+    storage = MongoStorage(client, db_name=location)
     storage.delete(uid)
     return True
     
 
 # check if the request is allowed by policy in the current level
 def is_request_allowed(request: flask.Request) -> bool:
+    class ThingAttributeProvider(AttributeProvider):
+        def get_attribute_value(self, ace, attribute_path, ctx):
+            if ace == "resource" and attribute_path == "$.thing_type":
+                thing_type = request.get_json().get("thing_type", None)
+                print("(ThingAttributeProvider) thing_type: ", thing_type)
+                return thing_type
+            return None
+
     class UserIdAttributeProvider(AttributeProvider):
-        def get_attribute_value(self, ace, attribute_path,ctx):
+        def get_attribute_value(self, ace, attribute_path, ctx):
             if not current_user:
                 return None
             if ace == "subject" and attribute_path == "$.id":
@@ -129,8 +137,8 @@ def is_request_allowed(request: flask.Request) -> bool:
             return None
             
     class EmailAttributeProvider(AttributeProvider):
-        def get_attribute_value(self, ace, attribute_path,ctx):
-            user_id = ctx.get_attribute_value("subject","$.id")
+        def get_attribute_value(self, ace, attribute_path, ctx):
+            user_id = ctx.get_attribute_value("subject", "$.id")
             if not user_id:
                 return None
             if ace == "subject" and attribute_path == "$.email":
@@ -149,8 +157,9 @@ def is_request_allowed(request: flask.Request) -> bool:
 
     class OtherAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace: str, attribute_path: str, ctx):
+
             # Assume attribute_path is in the form "$.<attribute_name>"
-            attr_name = re.search("[a-zA-Z]+", attribute_path).group().lower()
+            attr_name = re.search("[a-zA-Z_]+", attribute_path).group().lower()
             print("attribute_path: ", attribute_path)
             print("attr_name: ", attr_name)
             attr_value = auth_user_attributes.get(attr_name, None) or auth_server_attributes.get(attr_name, None)
@@ -163,7 +172,9 @@ def is_request_allowed(request: flask.Request) -> bool:
 
     client = MongoClient()
     storage = MongoStorage(client, db_name=policy_location)
-    pdp = PDP(storage,EvaluationAlgorithm.HIGHEST_PRIORITY,[EmailAttributeProvider(),UserIdAttributeProvider(),TimestampAttributeProvider(),OtherAttributeProvider()])
+    pdp = PDP(storage, EvaluationAlgorithm.HIGHEST_PRIORITY,
+              [ThingAttributeProvider(), EmailAttributeProvider(), UserIdAttributeProvider(),
+               TimestampAttributeProvider(), OtherAttributeProvider()])
 
     access_request_json = {
         "subject": {
@@ -179,12 +190,11 @@ def is_request_allowed(request: flask.Request) -> bool:
             "attributes": {"method": "get"}
         },
         "context": {
-            "timestamp":{}
+            "timestamp": {}
         }
     }
 
     access_request = AccessRequest.from_json(access_request_json)
-    # other_attributes = remove_attr_accessed(other_attributes)
     if pdp.is_allowed(access_request):
         return 1
     else:
@@ -194,8 +204,13 @@ def is_request_allowed(request: flask.Request) -> bool:
 """
 Lists of attributes that can be accessed from user provider or external oauth2 server
 """
-auth_user_attributes = {"address": None}
-auth_server_attributes = {"temperature": None}
+auth_user_attributes = {"address": None, "phone_number": None}
+auth_server_attributes = {"temperature": None, "rainfall": None}
+
+
+def set_auth_user_attr(attr_name, attr_value):
+    auth_user_attributes[attr_name] = attr_value
+    flask.session["info_authorize"] = 1
 
 
 def clear_auth_attributes():

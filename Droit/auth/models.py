@@ -54,6 +54,7 @@ class Policy(auth_db.Model):
     def get_user_id(self):
         return self.user_id
 
+
 class User(auth_db.Model, UserMixin):
     """ORM class that represents the user table
 
@@ -68,6 +69,7 @@ class User(auth_db.Model, UserMixin):
     username = auth_db.Column(auth_db.String(30), nullable=False)
     email = auth_db.Column(auth_db.String(35), unique=True, nullable=False)
     address = auth_db.Column(auth_db.String(128), nullable=True)
+    phone_number = auth_db.Column(auth_db.String(32), nullable=True)
     # if the user is loggedin using oidc, the password is random assigned
     password = auth_db.Column(auth_db.Text, nullable=False)
     account_type = auth_db.Column(auth_db.Enum(UserAccountTypeEnum))
@@ -83,6 +85,7 @@ class User(auth_db.Model, UserMixin):
         the user's unique identifier must be returned, in order to check the identity
         """
         return self.id
+
     def get_email(self):
         return self.email
     def get_username(self):
@@ -105,11 +108,15 @@ class User(auth_db.Model, UserMixin):
     def get_address(self):
         return self.address
 
+    def get_phone(self):
+        return self.phone_number
+
     def set_address(self, address):
         self.address = address
 
     def get_policy(self):
         return self.policy
+
 
 class OAuth2Client(auth_db.Model, OAuth2ClientMixin):
     """OAuth2/OpenID Connect client application class
@@ -265,7 +272,9 @@ class OpenIDCode(_OpenIDCode):
         """
         user_info = UserInfo(sub=str(user.id), username=user.username, email=user.email)
         if 'address' in scope:
-            user_info['address'] = user.address
+            user_info['address'] = user.get_address()
+        if 'phone_number' in scope:
+            user_info['phone_number'] = user.get_phone()
 
         return user_info
 
