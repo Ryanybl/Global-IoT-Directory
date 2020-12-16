@@ -3,8 +3,8 @@
     "rules": {
         "subject": {
             "$.timestamp": {"condition": "Gt","value": 1605902666.793003},
-            "$.Address": {"condition": "Contains", "value": "New York"},
-            "$.phone_number": {"condition": "Contains", "value": "123"}
+            "$.address": {"condition": "Contains", "value": "New York"},
+            "$.phone_number": {"condition": "RegexMatch", "value": "^01"}
         },
         "resource": {"id": {"condition": "RegexMatch", "value": ".*"}},
         "action": [{"$.method": {"condition": "Equals", "value": "create"}},

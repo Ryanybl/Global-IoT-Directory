@@ -54,8 +54,8 @@ providers_config = {
     # providers for level3aa directory
     "level3aa": {
         "level2b": {
-            "client_id": 'w2mzObTsURbG72SydnQl8Ruw',
-            "client_secret": 'tiY8NZiZrzVWDFgLYqwHKlaAdlY6qqJyxmfXL0Bh5YjoEjWA',
+            "client_id": 'f8VTqyuPaGWTCyXvcLha1yTC',
+            "client_secret": 'cw9oqJGtLGzfJ0qX51ynAfAliBYSmViQrka6VIFRuAshgzqz',
             "access_token_url": 'http://localhost:5003/auth/oidc_token',
             "access_token_params": None,
             "authorize_url": 'http://localhost:5003/auth/oidc_authorize',

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for
 from flask_login import current_user
-from ..utils import auth_user_attributes
+from ..utils import get_auth_attributes
 home = Blueprint('home', __name__)
 
 
@@ -26,9 +26,11 @@ def about():
     if current_user.is_anonymous:
         # redirect to login page if not logged in
         return redirect(url_for('auth.login'))
-    userid = current_user.get_user_id()
+    username = current_user.get_username()
     email = current_user.get_email()
     address = current_user.get_address()
+    auth_attributes = get_auth_attributes()
+    auth_user_attributes = auth_attributes[0]
     if not address:
         address = auth_user_attributes.get('address', None)
     phone_number = current_user.get_phone()
@@ -42,7 +44,7 @@ def about():
     print(policies)
     print(current_user.get_policy())
     return render_template("home/about.html",
-                           userid=userid, email=email, address=address, phone_number=phone_number, policies=policies)
+                           username=username, email=email, address=address, phone_number=phone_number, policies=policies)
 
 
 @home.route('/contact')

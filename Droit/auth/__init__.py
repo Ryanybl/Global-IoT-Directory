@@ -1,5 +1,5 @@
 from flask_login import LoginManager
-from .models import User, unicode_to_int
+from .models import User, unicode_to_int, AuthAttribute
 
 # Used by flask_login to maintain the current user state
 login_manager = LoginManager()

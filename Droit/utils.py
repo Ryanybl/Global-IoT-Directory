@@ -6,16 +6,17 @@ import jwcrypto.jwk as jwk
 import jwt
 from urllib.parse import urljoin
 from datetime import datetime
-from flask.helpers import url_for
 from py_abac.pdp import EvaluationAlgorithm
 from .models import DirectoryNameToURL, TargetToChildName
 from flask_login import current_user
-from .auth import User
+from .auth.models import auth_user_attr_default, auth_server_attr_default
+from .auth import User, AuthAttribute
 from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
 from py_abac import PDP, Policy, AccessRequest
 from py_abac.provider.base import AttributeProvider
 import re
+
 
 def is_json_request(request: flask.Request, properties: list = []) -> bool:
     """Check whether the request's body could be parsed to JSON format, and all necessary properties specified by `properties` are in the JSON object
@@ -157,10 +158,13 @@ def is_request_allowed(request: flask.Request) -> bool:
 
     class OtherAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace: str, attribute_path: str, ctx):
-            # Assume attribute_path is in the form "$.<attribute_name>"
+            # Assume attribute_path is in the form "$.attribute_name"
             attr_name = re.search("[a-zA-Z_]+", attribute_path).group().lower()
             print("attribute_path: ", attribute_path)
             print("attr_name: ", attr_name)
+            auth_attributes = get_auth_attributes()
+            auth_user_attributes = auth_attributes[0]
+            auth_server_attributes = auth_attributes[1]
             attr_value = auth_user_attributes.get(attr_name, None) or auth_server_attributes.get(attr_name, None)
             print("attr_value: ", attr_value)
             return attr_value
@@ -200,23 +204,43 @@ def is_request_allowed(request: flask.Request) -> bool:
         return 0
 
 
-"""
-Lists of attributes that can be accessed from user provider or external oauth2 server
-"""
-auth_user_attributes = {"address": None, "phone_number": None}
-auth_server_attributes = {"temperature": None, "rainfall": None}
-
-
 def set_auth_user_attr(attr_name, attr_value):
+    print("(set_auth_user_attr)")
+    user_id = current_user.get_user_id()
+    auth_attribute = AuthAttribute.query.filter_by(id=user_id).first()
+    auth_user_attributes = auth_attribute.get_user_attributes()
     auth_user_attributes[attr_name] = attr_value
+    print("auth_user_attributes: ", auth_user_attributes)
+    auth_attribute.set_user_attributes(auth_user_attributes)
     flask.session["info_authorize"] = 1
 
 
+def set_auth_server_attr(attr_name, attr_value):
+    print("set_auth_server_attr")
+    user_id = current_user.get_user_id()
+    auth_attribute = AuthAttribute.query.filter_by(id=user_id).first()
+    auth_server_attributes = auth_attribute.get_server_attributes()
+    auth_server_attributes[attr_name] = attr_value
+    print("auth_server_attributes: ", auth_server_attributes)
+    auth_attribute.set_server_attributes(auth_server_attributes)
+
+
 def clear_auth_attributes():
-    for k in auth_user_attributes.keys():
-        auth_user_attributes[k] = None
-    for s in auth_server_attributes.keys():
-        auth_server_attributes[s] = None
+    user_id = current_user.get_user_id()
+    auth_attribute = AuthAttribute.query.filter_by(id=user_id).first()
+    auth_attribute.set_user_attributes(auth_user_attr_default)
+    auth_attribute.set_server_attributes(auth_server_attr_default)
+
+
+def get_auth_attributes():
+    print("(get_auth_attributes)")
+    user_id = current_user.get_user_id()
+    auth_attribute = AuthAttribute.query.filter_by(id=user_id).first()
+    auth_user_attributes = auth_attribute.get_user_attributes()
+    auth_server_attributes = auth_attribute.get_server_attributes()
+    print("[auth_user_attributes, auth_server_attributes]: ", [auth_user_attributes, auth_server_attributes])
+    # return a list of two dictionaries
+    return [auth_user_attributes, auth_server_attributes]
 
 
 def is_policy_request(policy: dict, keys: list = []) -> bool:
@@ -227,6 +251,7 @@ def is_policy_request(policy: dict, keys: list = []) -> bool:
             return False
     return True
 
+
 # encode given payload to jwt, return encoded jwt, private key, public key
 def generate_jwt(payload):
     jwk_key = jwk.JWK.generate(kty='RSA', size=2048)
@@ -234,6 +259,7 @@ def generate_jwt(payload):
     pub_key = jwk_key.export_to_pem(password=None)
     encoded_jwt = jwt.encode(payload, priv_key, algorithm='RS256')
     return encoded_jwt, priv_key, pub_key
+
 
 def jwt_to_thing(encoded_jwt, priv_key, algorithm = 'RS256'):
     return jwt.decode(encoded_jwt,priv_key, algorithm = algorithm)

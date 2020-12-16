@@ -4,6 +4,7 @@ While the User class is also served as the ORM class in the local user managemen
 classes (except the UserAccountTypeEnum) is required by the Authlib library to represent some object.
 """
 import enum
+import json
 from flask_sqlalchemy import SQLAlchemy
 from flask import current_app as app
 
@@ -23,6 +24,12 @@ from authlib.oauth2.rfc6749.grants import (
 )
 
 auth_db = SQLAlchemy()
+
+"""
+Lists of attributes that can be accessed from user provider or external oauth2 server
+"""
+auth_user_attr_default = {"address": None, "phone_number": None}
+auth_server_attr_default = {"temperature": None, "rainfall": None}
 
 
 class UserAccountTypeEnum(enum.Enum):
@@ -53,6 +60,37 @@ class Policy(auth_db.Model):
         return self.location
     def get_user_id(self):
         return self.user_id
+
+
+class AuthAttribute(auth_db.Model):
+    """
+    A temporary storage database for holding attributes accessed via authorization
+    """
+    __tablename__ = 'auth_attribute'
+
+    id = auth_db.Column(auth_db.Integer, primary_key=True)
+    user_id = auth_db.Column(auth_db.Integer, auth_db.ForeignKey('user.id', ondelete='CASCADE'))
+    user = auth_db.relationship('User')
+    user_attributes = auth_db.Column(auth_db.Text, default=json.dumps(auth_user_attr_default))
+    server_attributes = auth_db.Column(auth_db.Text, default=json.dumps(auth_server_attr_default))
+
+    def get_user_attributes(self):
+        user_attr_dict = json.loads(self.user_attributes)
+        return user_attr_dict
+
+    def get_server_attributes(self):
+        server_attr_dict = json.loads(self.server_attributes)
+        return server_attr_dict
+
+    def set_user_attributes(self, user_attr_dict):
+        user_attr = json.dumps(user_attr_dict)
+        self.user_attributes = user_attr
+        auth_db.session.commit()
+
+    def set_server_attributes(self, server_attr_dict):
+        server_attr = json.dumps(server_attr_dict)
+        self.server_attributes = server_attr
+        auth_db.session.commit()
 
 
 class User(auth_db.Model, UserMixin):
@@ -88,6 +126,7 @@ class User(auth_db.Model, UserMixin):
 
     def get_email(self):
         return self.email
+
     def get_username(self):
         return self.username
         
@@ -113,6 +152,7 @@ class User(auth_db.Model, UserMixin):
 
     def set_address(self, address):
         self.address = address
+        auth_db.session.commit()
 
     def get_policy(self):
         return self.policy
