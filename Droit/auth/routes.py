@@ -29,12 +29,11 @@ import requests
 
 from ..forms import UserRegisterForm, UserLoginForm
 from ..auth import login_manager
-from .models import auth_db, User, UserAccountTypeEnum, OAuth2Client
+from .models import auth_db, User, UserAccountTypeEnum, OAuth2Client, AuthAttribute
 from .oauth2 import oauth, authorization
 from .forms import OAuthClientRegisterForm
 from ..auth.providers_config import oauth2_server_config
-from ..utils import set_auth_user_attr, auth_server_attributes, clear_auth_attributes
-from ..forms import QueryForm
+from ..utils import clear_auth_attributes, set_auth_user_attr, set_auth_server_attr
 
 auth = Blueprint('auth', __name__)
 
@@ -230,17 +229,26 @@ def oidc_auth_code_process(provider_name):
                     provider_name=provider_name)
         auth_db.session.add(user)
         auth_db.session.commit()
+        user_id = user.get_user_id()
+        print("user-id: ", user_id)
+        # add a AuthAttribute entry for the user to store the lists of attributes
+        # that can be accessed from user provider or external oauth2 server
+        auth_attr = AuthAttribute(user_id=user_id)
+        auth_db.session.add(auth_attr)
+        auth_db.session.commit()
 
     # set additional scope
     user_scope = token['scope']
+
+    # login this user using flask-login
+    login_user(user)
+    # clear_auth_attributes()
+
     # store additional user attributes in auth_user_attributes dictionary
     if 'address' in user_scope.split():
         set_auth_user_attr('address', user_info['address'])
     if 'phone_number' in user_scope.split():
         set_auth_user_attr('phone_number', user_info['phone_number'])
-
-    # login this user using flask-login
-    login_user(user)
 
     if user_scope != 'openid profile':
         # redirect to /info_authorize
@@ -265,7 +273,7 @@ def login():
         if user and verify_password(user.password, user_form.password.data):
             # login success, record it using flask-login
             login_user(user, remember=user_form.remember_me)
-            clear_auth_attributes()
+            # clear_auth_attributes()
             # check whether it's from authorize page. If so, redirect back, with same request parameters
             if "oauth_authorization" in request.args:
                 return redirect(url_for('auth.oidc_consent_authorize', **request.args))
@@ -296,10 +304,15 @@ def register():
                             password=get_hashed_password(user_form.password.data),
                             account_type=UserAccountTypeEnum.local)  # local user register
             auth_db.session.add(new_user)
+            user_id = new_user.get_user_id()
+            # add a AuthAttribute entry for the user to store the lists of attributes
+            # that can be accessed from user provider or external oauth2 server
+            auth_attr = AuthAttribute(user_id=user_id)
+            auth_db.session.add(auth_attr)
             auth_db.session.commit()
             # login success, record it using flask-login
             login_user(new_user)
-            clear_auth_attributes()
+            # clear_auth_attributes()
             return redirect(url_for('home.index'))
         else:
             # User already exist, return to the register page and show the error
@@ -314,6 +327,7 @@ def logout():
     """Logout user in the current session
 
     """
+    clear_auth_attributes()
     logout_user()
     return redirect(url_for('home.index'))
 
@@ -432,7 +446,8 @@ def server_authorize(server_config, attr_names, get_request):
     }
     info = requests.get(server_url + '/api/' + server_config["scope"], headers=headers)
     for attr_name in attr_names:
-        auth_server_attributes[attr_name] = info.json()[attr_name]
+        set_auth_server_attr(attr_name, info.json()[attr_name])
+        # auth_server_attributes[attr_name] = info.json()[attr_name]
     # clear server access scope
     server_config["access_scope"] = ''
 

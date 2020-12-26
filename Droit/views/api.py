@@ -11,7 +11,8 @@ from py_abac import PDP, AccessRequest, Policy
 from urllib.parse import urljoin, urlencode
 from ..models import ThingDescription, DirectoryNameToURL, TypeToChildrenNames, TargetToChildName
 from ..utils import get_target_url, is_json_request, clean_thing_description, add_policy_to_storage,\
-    delete_policy_from_storage, is_policy_request, is_request_allowed, auth_user_attributes, auth_server_attributes, generate_jwt
+    delete_policy_from_storage, is_policy_request, is_request_allowed, get_auth_attributes, set_auth_user_attr,\
+    generate_jwt
 from pymongo import MongoClient
 from py_abac.storage.mongo import MongoStorage
 from ..auth.models import auth_db, Policy
@@ -352,6 +353,15 @@ def policy_attr_auth():
     for p in storage.get_for_target("", str(thing_id), ""):
         subject_rules = get_attr_list(p.rules.subject)
         context_rules = get_attr_list(p.rules.context)
+        print("[API] (policy_attr_auth)")
+        auth_attributes = get_auth_attributes()
+        auth_user_attributes = auth_attributes[0]
+        auth_server_attributes = auth_attributes[1]
+        # initialize user attributes from profile info, if already exists
+        if not auth_user_attributes["address"]:
+            set_auth_user_attr("address", user.get_address())
+        if not auth_user_attributes["phone_number"]:
+            set_auth_user_attr("phone_number", user.get_phone())
         add_user_scope_str = get_auth_scopes(add_user_scope, subject_rules, auth_user_attributes)
         add_server_scope_str = get_auth_scopes(add_server_scope, context_rules, auth_server_attributes)
     print("add_user_scope_str: ", add_user_scope_str)
@@ -390,11 +400,6 @@ def policy_decision():
 
 
 def get_auth_scopes(auth_scope, attr_list, auth_attributes):
-    # initialize user attributes from profile info, if already exists
-    if not auth_user_attributes["address"]:
-        auth_user_attributes["address"] = user.get_address()
-    if not auth_user_attributes["phone_number"]:
-        auth_user_attributes["phone_number"] = user.get_phone()
     for s in attr_list:
         attr_name = re.search("[a-zA-Z_]+", s).group().lower()
         if (attr_name not in auth_scope) and (attr_name in auth_attributes):

@@ -72,3 +72,15 @@ To illustrate how to configure it, we give an example that level3aa provides a m
 ```
 
 > Now you can login level3aa with your username and password in level2b.
+
+
+
+## Attribute Based Access Control (ABAC)
+The ABAC system can be used to specify in what conditions a thing can be accessed. Rules are specified in policies and requests are automatically generated when user request throught the web user interface. Details about policy formats can be found from py_abac documentations. By default, requests are denied if there are no policies associated. When there is a conflict, the policy with highest priority dominates. 
+
+
+## Attribute Authorization System
+The attribute authorization system can be used to retrieve attribute information from various resource providers. The authorization process is triggered by the "Authorize" button under "Attributes". The system identities and classifies the attributes required by the associated policies in the IoT directory. The user will be redirected to the user consent page, where they can choose the attribute what they allow the ABAC system to access. The authorization and data retrieval process can be done iteratively.
+
+Currently, the system supports two types of attributes- user attributes (OIDC provider) and environmental attributes (example-oauth2-server). "example-oauth2-server" is a sample resource provider, which contains weather information including temperature and rainfall. The configuration for the oauth client is stored in "providers_config.py", which is client register under the username "test_user". Run the sample server by `python app.py` in the "example-oauth2-server" directory. The sample server runs on port 5100. Note: In current setting, you need to run `export AUTHLIB_INSECURE_TRANSPORT=1` in command line before starting the server.
+
