@@ -294,19 +294,11 @@ def register():
 @api.route('/policy', methods=['POST'])
 def policy():
     """Register a new policy using the py_abac format. 
-
-    If the current directory is the target location specified by `location` argument, the operation is processed locally
-    Otherwise it will delegate the operation to the next possible directory (if there is ), and return whatever the result it receives
-    
-    In addition, an extra 'push-up' operation may be called if the publicity is larger than zero. It will send a new register request
-    using the same thing description information to its parent directory with publicity decreased by one.
     
     Args:
         All of the following arguments are required and passed in the request URL.
-        td (JSON str): the information of the thing description to be registered in JSON format
+        td (JSON str): the information of the policy to be registered in JSON format
         location (str): the location where the thing description should be registered
-        publicity (number): specify the number of levels that the thing description should be duplicate to upper level directory.
-            By default this is zero, means it does not need to be pushed up.
 
     Returns:
         HTTP Response: if the register is completed, a simple success string with HTTP status code 200 is returned
