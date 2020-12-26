@@ -110,6 +110,17 @@ def add_policy_to_storage(policy: dict, location: str) -> bool :
 
 
 def delete_policy_from_storage(request : flask.Request)  -> bool :
+    """Delete a policy from storage. 
+
+    Args:
+        The function uses HTTP request directly. These argument must be contained in the request:
+        uid (str): uid of the policy
+        location (str): location the policy is stored
+
+    Returns:
+        True if the removal is successful. 
+
+    """
     request_json = request.get_json()
     uid = request_json['uid']
     location = request_json['location']
@@ -121,6 +132,16 @@ def delete_policy_from_storage(request : flask.Request)  -> bool :
 
 # check if the request is allowed by policy in the current level
 def is_request_allowed(request: flask.Request) -> bool:
+    """Check whether a request is allowed or not. 
+    Attributes are retrieved by the attribute providers and in order of the providers. 
+
+    Args:
+        request (JSON): request to the thing with identifications about the thing
+
+    Returns:
+        1/0 (int): indicating a request is allowed or not
+
+    """
     class ThingAttributeProvider(AttributeProvider):
         def get_attribute_value(self, ace, attribute_path, ctx):
             if ace == "resource" and attribute_path == "$.thing_type":
@@ -252,8 +273,18 @@ def is_policy_request(policy: dict, keys: list = []) -> bool:
     return True
 
 
-# encode given payload to jwt, return encoded jwt, private key, public key
 def generate_jwt(payload):
+
+    """Encode given payload to jwt, return encoded jwt, private key, public key
+
+    Args:
+        payload (dict): the payload to be encoded in the jwt
+
+    Returns:
+        Encoded jwt(json), private key (str) used to encode the payload, public key(str) used to encode the payload
+
+    """
+
     jwk_key = jwk.JWK.generate(kty='RSA', size=2048)
     priv_key = jwk_key.export_to_pem(private_key=True, password=None)
     pub_key = jwk_key.export_to_pem(password=None)
@@ -262,4 +293,14 @@ def generate_jwt(payload):
 
 
 def jwt_to_thing(encoded_jwt, priv_key, algorithm = 'RS256'):
+    """Decodes the jwt with private key
+
+    Args:
+        encoded_jwt (JSON): the encoded jwt created using generate_jwt(payload)
+        priv_key (str): private key used to encode
+
+    Returns:
+        decoded jwt(json)
+
+    """
     return jwt.decode(encoded_jwt,priv_key, algorithm = algorithm)

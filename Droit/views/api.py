@@ -390,6 +390,19 @@ def get_attr_list(policy_rules):
 
 @api.route('/policy_decision', methods=['POST'])
 def policy_decision():
+    """Determines whether a request is allowed or not
+
+    Args:
+        The function uses HTTP request directly. These argument must be contained in the request:
+        thing_id (str): identification of the thing
+        thing_type (str): type of the thing
+        action (str): get,delete, or create
+
+    Returns:
+        success: HTTP response with a short string indicating of successfulness and status code 
+        failure: user id and status code
+
+    """
     if not is_json_request(request, ["thing_id", "thing_type", "action"]):
         return jsonify(ERROR_JSON), 400
     code = is_request_allowed(request)
@@ -410,6 +423,17 @@ def get_auth_scopes(auth_scope, attr_list, auth_attributes):
 
 @api.route('/delete_policy', methods=['POST'])
 def delete_policy():
+    """Delete a policy from storage and the database
+
+    Args:
+        The function uses HTTP request directly. These argument must be contained in the request:
+        uid (str): uid of the policy
+        location (str): location the policy is stored
+
+    Returns:
+        HTTP response with a short string indicating of successfulness and status code 
+
+    """
     if delete_policy_from_storage(request):
         request_json = request.get_json()
         uid = request_json['uid']
@@ -566,6 +590,19 @@ def search():
 
 @api.route('/jwt', methods=['GET'])
 def get_jwt():
+
+    """Generate jwt of the requested thing with minimal inforamtion in the payload`
+
+    Args:
+        This method receive arguments from HTTP request body, which must be JSON format containing following properties
+        thing_id (str): uniquely identify the thing description to be deleted
+        Also, user must be logged in for username attribute.
+    Returns:
+        HTTP Response: The response is a jwt in JSON format with corresponding HTTP status code indicating the result
+        if the deletion is performed succesfully, or there is no such thing description in the target directory,
+        the deletion is complete with HTTP status code 200 being returned. Otherwise HTTP status code 400 is returned.
+    """
+
     thing_id = request.args.get('thing_id')
     username = user.get_username()
     timestamp = datetime.now().timestamp()
